@@ -1,12 +1,12 @@
 import os
 import uuid
 import logging
+import asyncio
 from datetime import datetime
 from typing import List, Optional, Dict, Any
 from fastapi import FastAPI, HTTPException, Depends, UploadFile, File, Form, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, PlainTextResponse
-from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 
@@ -14,7 +14,6 @@ from pydantic import BaseModel
 from config import settings, validate_settings, get_upload_path, is_file_allowed, is_file_size_valid
 from database import get_db, create_tables, create_initial_data, health_check, get_chatbot_by_type
 from auth import login_admin, get_current_active_user, require_admin
-from rag_system import get_student_rag
 from models import User, Chatbot, Document as DocModel, Conversation, ChatbotType
 
 # Setup logging
@@ -24,10 +23,10 @@ logger = logging.getLogger(__name__)
 # Validate configuration on startup
 try:
     validate_settings()
-    logger.info("✅ Configuration validated")
+    logger.info("Configuration validated")
 except ValueError as e:
-    logger.error(f"❌ Configuration error: {e}")
-    exit(1)
+    logger.error(f"Configuration error: {e}")
+    # Don't exit in production - let some features fail gracefully
 
 # Create FastAPI app
 app = FastAPI(
@@ -49,6 +48,45 @@ app.add_middleware(
 
 # Create uploads directory
 os.makedirs(settings.upload_dir, exist_ok=True)
+
+# Global RAG system instance (initialized lazily)
+_rag_system = None
+
+def get_rag_system():
+    """Get or initialize RAG system lazily"""
+    global _rag_system
+    if _rag_system is None:
+        try:
+            from rag_system import get_student_rag
+            _rag_system = get_student_rag()
+            logger.info("RAG system initialized successfully")
+        except Exception as e:
+            logger.error(f"Failed to initialize RAG system: {e}")
+            # Return a mock RAG system for graceful degradation
+            _rag_system = MockRAGSystem()
+    return _rag_system
+
+class MockRAGSystem:
+    """Fallback RAG system when initialization fails"""
+    def health_check(self):
+        return {"status": "degraded", "error": "RAG system unavailable"}
+    
+    async def query_student_bot(self, question: str, session_id: str = None):
+        return {
+            "answer": "I'm sorry, the knowledge base is temporarily unavailable. Please try again later.",
+            "sources": [],
+            "response_time_ms": 0,
+            "session_id": session_id
+        }
+    
+    def get_student_documents(self):
+        return []
+    
+    def delete_document(self, document_id: int):
+        return False
+    
+    async def process_pdf(self, file_path: str, filename: str, chatbot_id: int):
+        return {"status": "error", "message": "PDF processing unavailable"}
 
 # Pydantic models for API
 class LoginRequest(BaseModel):
@@ -80,27 +118,22 @@ class HealthResponse(BaseModel):
     rag_system: Dict[str, Any]
     timestamp: str
 
-# Startup event
+# Startup event - minimal and resilient
 @app.on_event("startup")
 async def startup_event():
-    """Initialize database and RAG system on startup"""
-    logger.info("🚀 Starting Student Chatbot Platform...")
+    """Initialize database on startup - keep minimal for fast startup"""
+    logger.info("Starting Student Chatbot Platform...")
     
-    # Create tables if they don't exist
-    if create_tables():
-        logger.info("✅ Database tables ready")
-        create_initial_data()
-    else:
-        logger.error("❌ Database setup failed")
-        return
-    
-    # Initialize RAG system
     try:
-        rag = get_student_rag()
-        health = rag.health_check()
-        logger.info(f"✅ RAG system initialized: {health['status']}")
+        # Only do essential database setup
+        if create_tables():
+            logger.info("Database tables ready")
+            create_initial_data()
+        else:
+            logger.warning("Database setup issues - some features may not work")
     except Exception as e:
-        logger.error(f"❌ RAG system failed to initialize: {e}")
+        logger.error(f"Database startup error: {e}")
+        # Continue anyway - let health check endpoints reveal issues
 
 # Root endpoint
 @app.get("/")
@@ -113,17 +146,32 @@ async def root():
         "docs": "/docs" if settings.debug else "disabled"
     }
 
+# Simple ping endpoint for load balancer health checks
+@app.get("/ping")
+async def ping():
+    """Simple health check that doesn't depend on heavy services"""
+    return {"status": "ok", "timestamp": datetime.utcnow().isoformat()}
+
 # Health check endpoint
 @app.get("/health", response_model=HealthResponse)
 async def health_endpoint():
     """System health check"""
-    rag = get_student_rag()
-    return HealthResponse(
-        status="healthy",
-        database=health_check(),
-        rag_system=rag.health_check(),
-        timestamp=datetime.utcnow().isoformat()
-    )
+    try:
+        rag = get_rag_system()
+        return HealthResponse(
+            status="healthy",
+            database=health_check(),
+            rag_system=rag.health_check(),
+            timestamp=datetime.utcnow().isoformat()
+        )
+    except Exception as e:
+        logger.error(f"Health check error: {e}")
+        return HealthResponse(
+            status="degraded",
+            database=False,
+            rag_system={"status": "error", "message": str(e)},
+            timestamp=datetime.utcnow().isoformat()
+        )
 
 # Authentication endpoints
 @app.post("/auth/login")
@@ -131,10 +179,10 @@ async def login(request: LoginRequest, db: Session = Depends(get_db)):
     """Admin login endpoint"""
     try:
         result = login_admin(request.email, request.password, db)
-        logger.info(f"✅ Admin login successful: {request.email}")
+        logger.info(f"Admin login successful: {request.email}")
         return result
     except HTTPException as e:
-        logger.warning(f"❌ Login failed for {request.email}")
+        logger.warning(f"Login failed for {request.email}")
         raise e
 
 @app.get("/auth/me")
@@ -209,7 +257,7 @@ async def upload_student_document(
             f.write(content)
         
         # Process PDF in background
-        rag = get_student_rag()
+        rag = get_rag_system()
         background_tasks.add_task(
             rag.process_pdf, 
             file_path, 
@@ -217,7 +265,7 @@ async def upload_student_document(
             student_bot.id
         )
         
-        logger.info(f"📄 PDF upload initiated: {file.filename}")
+        logger.info(f"PDF upload initiated: {file.filename}")
         
         return {
             "message": f"File {file.filename} uploaded successfully. Processing in background.",
@@ -229,15 +277,19 @@ async def upload_student_document(
         # Clean up file on error
         if os.path.exists(file_path):
             os.remove(file_path)
-        logger.error(f"❌ Upload error: {e}")
+        logger.error(f"Upload error: {e}")
         raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
 
 @app.get("/admin/student/documents", response_model=List[DocumentInfo])
 async def list_student_documents(current_user: User = Depends(require_admin)):
     """Get list of documents in student knowledge base"""
-    rag = get_student_rag()
-    documents = rag.get_student_documents()
-    return [DocumentInfo(**doc) for doc in documents]
+    try:
+        rag = get_rag_system()
+        documents = rag.get_student_documents()
+        return [DocumentInfo(**doc) for doc in documents]
+    except Exception as e:
+        logger.error(f"Error listing documents: {e}")
+        return []
 
 @app.delete("/admin/student/documents/{document_id}")
 async def delete_student_document(
@@ -245,7 +297,7 @@ async def delete_student_document(
     current_user: User = Depends(require_admin)
 ):
     """Delete document from student knowledge base"""
-    rag = get_student_rag()
+    rag = get_rag_system()
     success = rag.delete_document(document_id)
     
     if not success:
@@ -259,7 +311,7 @@ async def test_student_chat(
     current_user: User = Depends(require_admin)
 ):
     """Test student chatbot with admin query"""
-    rag = get_student_rag()
+    rag = get_rag_system()
     session_id = f"admin_test_{uuid.uuid4()}"
     
     result = await rag.query_student_bot(request.message, session_id)
@@ -270,7 +322,7 @@ async def test_student_chat(
 async def chat_with_student_bot(request: ChatRequest):
     """Public endpoint for student chat widget"""
     try:
-        rag = get_student_rag()
+        rag = get_rag_system()
         
         # Generate session ID if not provided
         session_id = request.session_id or str(uuid.uuid4())
@@ -278,11 +330,11 @@ async def chat_with_student_bot(request: ChatRequest):
         # Get response from RAG system
         result = await rag.query_student_bot(request.message, session_id)
         
-        logger.info(f"💬 Student query answered: {request.message[:50]}...")
+        logger.info(f"Student query answered: {request.message[:50]}...")
         return ChatResponse(**result)
         
     except Exception as e:
-        logger.error(f"❌ Chat error: {e}")
+        logger.error(f"Chat error: {e}")
         return ChatResponse(
             answer="I'm sorry, I'm having trouble processing your question right now. Please try again later.",
             sources=[],
@@ -290,16 +342,18 @@ async def chat_with_student_bot(request: ChatRequest):
             session_id=request.session_id
         )
 
-# Widget JavaScript endpoint
+# Widget JavaScript endpoint - simplified for reliability
 @app.get("/widget/student.js", response_class=PlainTextResponse)
 async def get_student_widget():
     """Serve student chat widget JavaScript"""
+    # Get the base URL from the request
+    base_url = os.getenv("RENDER_EXTERNAL_URL", "http://localhost:8000")
+    
     widget_js = f"""
 (function() {{
-    // Student Chat Widget v{settings.api_version}
-    const CHAT_API_URL = '{request.url_for("chat_with_student_bot").replace("student", "student")}';
-    const WIDGET_TITLE = '{settings.student_widget_title}';
-    const WELCOME_MESSAGE = '{settings.student_welcome_message}';
+    const API_BASE_URL = '{base_url}';
+    const WIDGET_TITLE = 'Student Support';
+    const WELCOME_MESSAGE = 'Hi! I\\'m here to help with your academic questions.';
     
     let sessionId = localStorage.getItem('student_chat_session') || generateSessionId();
     localStorage.setItem('student_chat_session', sessionId);
@@ -309,41 +363,45 @@ async def get_student_widget():
     }}
     
     function createWidget() {{
+        if (document.getElementById('student-chat-widget')) return;
+        
         const widget = document.createElement('div');
         widget.id = 'student-chat-widget';
         widget.innerHTML = `
-            <div style="position: fixed; bottom: 20px; right: 20px; z-index: 9999;">
+            <div style="position: fixed; bottom: 20px; right: 20px; z-index: 9999; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
                 <div id="chat-button" style="
                     width: 60px; height: 60px; border-radius: 50%; 
-                    background: #3B82F6; color: white; border: none; 
-                    cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+                    background: linear-gradient(135deg, #3B82F6, #1D4ED8); color: white; border: none; 
+                    cursor: pointer; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
                     display: flex; align-items: center; justify-content: center;
-                    font-size: 24px;
+                    font-size: 24px; transition: transform 0.2s;
                 ">💬</div>
                 <div id="chat-window" style="
                     position: absolute; bottom: 70px; right: 0;
                     width: 350px; height: 500px; background: white;
-                    border-radius: 12px; box-shadow: 0 8px 32px rgba(0,0,0,0.3);
-                    display: none; flex-direction: column;
+                    border-radius: 12px; box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+                    display: none; flex-direction: column; border: 1px solid #e5e7eb;
                 ">
-                    <div style="padding: 15px; background: #3B82F6; color: white; border-radius: 12px 12px 0 0;">
-                        <h3 style="margin: 0; font-size: 16px;">${{WIDGET_TITLE}}</h3>
+                    <div style="padding: 16px; background: linear-gradient(135deg, #3B82F6, #1D4ED8); color: white; border-radius: 12px 12px 0 0;">
+                        <h3 style="margin: 0; font-size: 16px; font-weight: 600;">${{WIDGET_TITLE}}</h3>
+                        <p style="margin: 4px 0 0 0; font-size: 12px; opacity: 0.9;">Ask me about academic information</p>
                     </div>
                     <div id="chat-messages" style="
-                        flex: 1; padding: 15px; overflow-y: auto; 
-                        background: #f9fafb;
+                        flex: 1; padding: 16px; overflow-y: auto; background: #f9fafb; max-height: 350px;
                     ">
-                        <div style="background: #e5e7eb; padding: 10px; border-radius: 8px; margin-bottom: 10px;">
-                            ${{WELCOME_MESSAGE}}
+                        <div style="background: white; padding: 12px; border-radius: 8px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                            <p style="margin: 0; font-size: 14px; color: #374151;">${{WELCOME_MESSAGE}}</p>
                         </div>
                     </div>
-                    <div style="padding: 15px; border-top: 1px solid #e5e7eb;">
+                    <div style="padding: 16px; border-top: 1px solid #e5e7eb; background: white;">
                         <div style="display: flex; gap: 8px;">
-                            <input type="text" id="chat-input" placeholder="Ask about student services..." 
-                                style="flex: 1; padding: 8px; border: 1px solid #d1d5db; border-radius: 6px;">
+                            <input type="text" id="chat-input" placeholder="Ask a question..." style="
+                                flex: 1; padding: 10px 12px; border: 1px solid #d1d5db; border-radius: 20px;
+                                outline: none; font-size: 14px;
+                            ">
                             <button id="chat-send" style="
-                                padding: 8px 15px; background: #3B82F6; color: white; 
-                                border: none; border-radius: 6px; cursor: pointer;
+                                padding: 10px 16px; background: #3B82F6; color: white; border: none;
+                                border-radius: 20px; cursor: pointer; font-size: 14px; font-weight: 500;
                             ">Send</button>
                         </div>
                     </div>
@@ -353,44 +411,42 @@ async def get_student_widget():
         
         document.body.appendChild(widget);
         
-        // Event listeners
         const chatButton = document.getElementById('chat-button');
         const chatWindow = document.getElementById('chat-window');
         const chatInput = document.getElementById('chat-input');
         const chatSend = document.getElementById('chat-send');
         const chatMessages = document.getElementById('chat-messages');
         
+        let isOpen = false;
+        
         chatButton.addEventListener('click', () => {{
-            chatWindow.style.display = chatWindow.style.display === 'none' ? 'flex' : 'none';
+            isOpen = !isOpen;
+            chatWindow.style.display = isOpen ? 'flex' : 'none';
+            if (isOpen) chatInput.focus();
         }});
         
         async function sendMessage() {{
             const message = chatInput.value.trim();
             if (!message) return;
             
-            // Add user message
             addMessage(message, 'user');
             chatInput.value = '';
             
-            // Add typing indicator
             const typingDiv = addMessage('Typing...', 'bot', true);
             
             try {{
-                const response = await fetch(CHAT_API_URL, {{
+                const response = await fetch(`${{API_BASE_URL}}/chat/student`, {{
                     method: 'POST',
                     headers: {{ 'Content-Type': 'application/json' }},
                     body: JSON.stringify({{ message, session_id: sessionId }})
                 }});
                 
                 const data = await response.json();
-                
-                // Remove typing indicator
                 typingDiv.remove();
                 
-                // Add bot response
                 let botMessage = data.answer;
                 if (data.sources && data.sources.length > 0) {{
-                    botMessage += '\\n\\n📚 Sources: ' + 
+                    botMessage += '\\n\\nSources: ' + 
                         data.sources.map(s => `Page ${{s.page}}`).join(', ');
                 }}
                 addMessage(botMessage, 'bot');
@@ -404,14 +460,20 @@ async def get_student_widget():
         function addMessage(text, sender, isTyping = false) {{
             const messageDiv = document.createElement('div');
             messageDiv.style.cssText = `
-                margin-bottom: 10px; padding: 10px; border-radius: 8px;
-                background: ${{sender === 'user' ? '#3B82F6' : '#e5e7eb'}};
-                color: ${{sender === 'user' ? 'white' : 'black'}};
-                margin-left: ${{sender === 'user' ? '20px' : '0'}};
-                margin-right: ${{sender === 'user' ? '0' : '20px'}};
-                white-space: pre-wrap;
+                margin-bottom: 12px; display: flex; justify-content: ${{sender === 'user' ? 'flex-end' : 'flex-start'}};
             `;
-            messageDiv.textContent = text;
+            
+            const messageContent = document.createElement('div');
+            messageContent.style.cssText = `
+                max-width: 80%; padding: 10px 12px; border-radius: 12px;
+                background: ${{sender === 'user' ? '#3B82F6' : 'white'}};
+                color: ${{sender === 'user' ? 'white' : '#374151'}};
+                font-size: 14px; line-height: 1.4; white-space: pre-wrap;
+                box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            `;
+            messageContent.textContent = text;
+            
+            messageDiv.appendChild(messageContent);
             chatMessages.appendChild(messageDiv);
             chatMessages.scrollTop = chatMessages.scrollHeight;
             return messageDiv;
@@ -421,9 +483,16 @@ async def get_student_widget():
         chatInput.addEventListener('keypress', (e) => {{
             if (e.key === 'Enter') sendMessage();
         }});
+        
+        // Hover effect
+        chatButton.addEventListener('mouseenter', () => {{
+            chatButton.style.transform = 'scale(1.05)';
+        }});
+        chatButton.addEventListener('mouseleave', () => {{
+            chatButton.style.transform = 'scale(1)';
+        }});
     }}
     
-    // Initialize widget when DOM is ready
     if (document.readyState === 'loading') {{
         document.addEventListener('DOMContentLoaded', createWidget);
     }} else {{
@@ -440,38 +509,46 @@ async def get_student_analytics(
     db: Session = Depends(get_db)
 ):
     """Get student chatbot analytics"""
-    student_bot = db.query(Chatbot).filter(Chatbot.type == ChatbotType.STUDENT).first()
-    if not student_bot:
-        raise HTTPException(status_code=404, detail="Student chatbot not found")
-    
-    # Get recent conversations
-    recent_conversations = db.query(Conversation).filter(
-        Conversation.chatbot_id == student_bot.id
-    ).order_by(Conversation.created_at.desc()).limit(10).all()
-    
-    # Basic analytics
-    total_conversations = db.query(Conversation).filter(
-        Conversation.chatbot_id == student_bot.id
-    ).count()
-    
-    return {
-        "total_conversations": total_conversations,
-        "recent_conversations": [
-            {
-                "question": conv.user_message[:100] + "..." if len(conv.user_message) > 100 else conv.user_message,
-                "response_time_ms": conv.response_time_ms,
-                "created_at": conv.created_at.isoformat()
-            }
-            for conv in recent_conversations
-        ]
-    }
+    try:
+        student_bot = db.query(Chatbot).filter(Chatbot.type == ChatbotType.STUDENT).first()
+        if not student_bot:
+            raise HTTPException(status_code=404, detail="Student chatbot not found")
+        
+        # Get recent conversations
+        recent_conversations = db.query(Conversation).filter(
+            Conversation.chatbot_id == student_bot.id
+        ).order_by(Conversation.created_at.desc()).limit(10).all()
+        
+        # Basic analytics
+        total_conversations = db.query(Conversation).filter(
+            Conversation.chatbot_id == student_bot.id
+        ).count()
+        
+        return {
+            "total_conversations": total_conversations,
+            "recent_conversations": [
+                {
+                    "question": conv.user_message[:100] + "..." if len(conv.user_message) > 100 else conv.user_message,
+                    "response_time_ms": conv.response_time_ms,
+                    "created_at": conv.created_at.isoformat()
+                }
+                for conv in recent_conversations
+            ]
+        }
+    except Exception as e:
+        logger.error(f"Analytics error: {e}")
+        return {
+            "total_conversations": 0,
+            "recent_conversations": []
+        }
 
 if __name__ == "__main__":
     import uvicorn
+    port = int(os.environ.get("PORT", 8000))
     uvicorn.run(
         "main:app", 
         host="0.0.0.0", 
-        port=8000, 
-        reload=settings.debug,
-        log_level=settings.log_level.lower()
+        port=port,
+        reload=False,  # Always False in production
+        log_level="info"
     )
