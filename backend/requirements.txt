@@ -22,7 +22,7 @@ sentence-transformers==2.2.2
 
 # PDF Processing
 pypdf==3.17.1
-PyMuPDF==1.23.5
+PyMuPDF==1.24.0
 
 # Configuration
 pydantic-settings==2.0.3
