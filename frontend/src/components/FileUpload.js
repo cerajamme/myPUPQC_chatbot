@@ -30,7 +30,7 @@ const FileUpload = () => {
     setMessage('');
 
     try {
-      const response = await admin.uploadDocument(file);
+      await admin.uploadDocument(file);
       setMessage(`Successfully uploaded: ${file.name}`);
       setMessageType('success');
       setFile(null);

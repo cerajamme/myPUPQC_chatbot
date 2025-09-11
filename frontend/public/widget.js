@@ -2,7 +2,10 @@
     'use strict';
     
     // Configuration
-    const API_BASE_URL = 'http://localhost:8000'; // Change this to your production URL
+// In src/api.js, update the API_BASE_URL
+    const API_BASE_URL = process.env.NODE_ENV === 'production' 
+    ? 'https://mypupqc-chatbot-backend.onrender.com'  // Your live backend
+    : 'http://localhost:8000';
     const WIDGET_ID = 'student-chatbot-widget';
     
     // Prevent multiple widget loads

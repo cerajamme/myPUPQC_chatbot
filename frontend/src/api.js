@@ -1,7 +1,10 @@
 import axios from 'axios';
 
-const API_BASE_URL = 'http://localhost:8000';
-
+// In src/api.js, update the API_BASE_URL
+const API_BASE_URL = process.env.NODE_ENV === 'production' 
+  ? 'https://mypupqc-chatbot-backend.onrender.com'  // Your live backend
+  : 'http://localhost:8000';
+  
 // Create axios instance with default config
 const api = axios.create({
   baseURL: API_BASE_URL,
