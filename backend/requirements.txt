@@ -15,25 +15,28 @@ alembic==1.12.1
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
 
-# LangChain and AI
-langchain==0.0.350
-langchain-google-genai==0.0.8
-sentence-transformers==2.2.2
+# LlamaIndex and AI (replaced LangChain)
+llama-index-core==0.10.57
+llama-index==0.10.57
+llama-index-vector-stores-postgres==0.1.8
+llama-index-llms-gemini==0.1.9
+llama-index-embeddings-huggingface==0.2.2
+sentence-transformers==2.7.0
 
 # PDF Processing
-pypdf==3.17.1
-PyMuPDF==1.24.0
+pypdf==4.0.1
+# PyMuPDF==1.23.5  # Commented out - causes build issues on Render
 
 # Configuration
-pydantic-settings==2.0.3
-python-dotenv==1.0.0
+pydantic-settings==2.3.0
+python-dotenv==1.0.1
 
 # HTTP Client
-httpx==0.25.2
+httpx==0.27.0
 
 # Utilities
-python-slugify==8.0.1
-pillow==10.1.0
+python-slugify==8.0.4
+# pillow==10.1.0  # Commented out - let dependencies handle this
 
 # Development (optional - remove in production)
 pytest==7.4.3
