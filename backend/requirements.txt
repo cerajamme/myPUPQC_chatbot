@@ -1,0 +1,40 @@
+# FastAPI and Web Framework
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+python-multipart==0.0.6
+
+# Database
+sqlalchemy==2.0.23
+# psycopg2-binary==2.9.7  # Commented out - causes Windows build issues
+asyncpg==0.29.0  # Alternative PostgreSQL driver for async
+psycopg==3.1.12  # Modern psycopg3 (easier to install on Windows)
+pgvector==0.2.4
+alembic==1.12.1
+
+# Authentication & Security
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+
+# LangChain and AI
+langchain==0.0.350
+langchain-google-genai==0.0.8
+sentence-transformers==2.2.2
+
+# PDF Processing
+pypdf==3.17.1
+PyMuPDF==1.23.5
+
+# Configuration
+pydantic-settings==2.0.3
+python-dotenv==1.0.0
+
+# HTTP Client
+httpx==0.25.2
+
+# Utilities
+python-slugify==8.0.1
+pillow==10.1.0
+
+# Development (optional - remove in production)
+pytest==7.4.3
+pytest-asyncio==0.21.1
