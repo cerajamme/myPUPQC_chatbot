@@ -15,10 +15,10 @@ alembic==1.12.1
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
 
-# LlamaIndex and AI (replaced LangChain)
+# LlamaIndex and AI (using correct versions)
 llama-index-core==0.10.57
 llama-index==0.10.57
-llama-index-vector-stores-postgres==0.1.8
+llama-index-vector-stores-postgres==0.6.6
 llama-index-llms-gemini==0.1.9
 llama-index-embeddings-huggingface==0.2.2
 sentence-transformers==2.7.0
