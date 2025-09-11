@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Chatbot Widget Demo</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f8fafc;
+        }
+        .container {
+            background: white;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        h1 {
+            color: #1f2937;
+            margin-bottom: 20px;
+        }
+        .integration-code {
+            background: #f3f4f6;
+            padding: 20px;
+            border-radius: 8px;
+            border-left: 4px solid #3b82f6;
+            margin: 20px 0;
+        }
+        code {
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Student Support Chatbot Demo</h1>
+        
+        <p>This page demonstrates the embeddable student chatbot widget. The chat button appears in the bottom-right corner.</p>
+        
+        <h2>How to integrate:</h2>
+        
+        <div class="integration-code">
+            <code>&lt;script src="http://localhost:3000/widget.js"&gt;&lt;/script&gt;</code>
+        </div>
+        
+        <h2>Features:</h2>
+        <ul>
+            <li>Floating chat button in bottom-right corner</li>
+            <li>Clean, responsive chat interface</li>
+            <li>Session persistence across page reloads</li>
+            <li>Source citations from uploaded documents</li>
+            <li>Typing indicators for better UX</li>
+            <li>Mobile-friendly design</li>
+        </ul>
+        
+        <h2>Try it out:</h2>
+        <p>Click the chat button in the bottom-right corner and ask questions about your uploaded student documents.</p>
+        
+        <h2>Sample questions:</h2>
+        <ul>
+            <li>"What are the graduation requirements?"</li>
+            <li>"When is the deadline for course registration?"</li>
+            <li>"How do I apply for financial aid?"</li>
+        </ul>
+    </div>
+
+    <!-- Include the widget -->
+    <script src="./widget.js"></script>
+</body>
+</html>
