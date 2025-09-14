@@ -20,7 +20,7 @@ from models import User, Chatbot, Document as DocModel, Conversation, ChatbotTyp
 logging.basicConfig(level=getattr(logging, settings.log_level))
 logger = logging.getLogger(__name__)
 
-# Validate configuration on startup WORK
+# Validate configuration on startup
 try:
     validate_settings()
     logger.info("Configuration validated")
@@ -37,12 +37,13 @@ app = FastAPI(
     redoc_url="/redoc" if settings.debug else None
 )
 
-# CORS middleware for embeddable widgets
+# CORS middleware - Fixed to properly use dynamic allowed_origins
+logger.info(f"CORS allowed origins: {settings.allowed_origins}")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.allowed_origins,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
 
@@ -122,17 +123,20 @@ class HealthResponse(BaseModel):
 @app.on_event("startup")
 async def startup_event():
     """Initialize database on startup - keep minimal for fast startup"""
-    logger.info("Starting Student Chatbot Platform...")
+    logger.info("🚀 Starting Student Chatbot Platform...")
+    logger.info(f"Environment: {settings.environment}")
+    logger.info(f"Frontend URL: {settings.frontend_url}")
+    logger.info(f"CORS origins: {settings.allowed_origins}")
     
     try:
         # Only do essential database setup
         if create_tables():
-            logger.info("Database tables ready")
+            logger.info("✅ Database tables ready")
             create_initial_data()
         else:
-            logger.warning("Database setup issues - some features may not work")
+            logger.warning("⚠️ Database setup issues - some features may not work")
     except Exception as e:
-        logger.error(f"Database startup error: {e}")
+        logger.error(f"❌ Database startup error: {e}")
         # Continue anyway - let health check endpoints reveal issues
 
 # Root endpoint
@@ -143,6 +147,7 @@ async def root():
         "message": "Student Chatbot Platform API",
         "version": settings.api_version,
         "status": "running",
+        "environment": settings.environment,
         "docs": "/docs" if settings.debug else "disabled"
     }
 
@@ -342,162 +347,342 @@ async def chat_with_student_bot(request: ChatRequest):
             session_id=request.session_id
         )
 
-# Widget JavaScript endpoint - simplified for reliability
+# Widget JavaScript endpoint - Fixed to use proper backend URL
 @app.get("/widget/student.js", response_class=PlainTextResponse)
 async def get_student_widget():
     """Serve student chat widget JavaScript"""
-    # Get the base URL from the request
-    base_url = os.getenv("RENDER_EXTERNAL_URL", "http://localhost:8000")
+    # Use proper backend URL resolution
+    base_url = (
+        os.getenv("BACKEND_URL") or 
+        os.getenv("RENDER_EXTERNAL_URL") or 
+        "https://mypupqcchatbot-production.up.railway.app"
+    )
     
     widget_js = f"""
 (function() {{
+    'use strict';
+    
     const API_BASE_URL = '{base_url}';
-    const WIDGET_TITLE = 'Student Support';
-    const WELCOME_MESSAGE = 'Hi! I\\'m here to help with your academic questions.';
+    const WIDGET_ID = 'student-chatbot-widget';
     
-    let sessionId = localStorage.getItem('student_chat_session') || generateSessionId();
-    localStorage.setItem('student_chat_session', sessionId);
-    
-    function generateSessionId() {{
-        return 'student_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now();
+    // Prevent multiple widget loads
+    if (document.getElementById(WIDGET_ID)) {{
+        return;
     }}
     
-    function createWidget() {{
-        if (document.getElementById('student-chat-widget')) return;
-        
-        const widget = document.createElement('div');
-        widget.id = 'student-chat-widget';
-        widget.innerHTML = `
-            <div style="position: fixed; bottom: 20px; right: 20px; z-index: 9999; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
-                <div id="chat-button" style="
-                    width: 60px; height: 60px; border-radius: 50%; 
-                    background: linear-gradient(135deg, #3B82F6, #1D4ED8); color: white; border: none; 
-                    cursor: pointer; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
-                    display: flex; align-items: center; justify-content: center;
-                    font-size: 24px; transition: transform 0.2s;
-                ">💬</div>
-                <div id="chat-window" style="
-                    position: absolute; bottom: 70px; right: 0;
-                    width: 350px; height: 500px; background: white;
-                    border-radius: 12px; box-shadow: 0 8px 32px rgba(0,0,0,0.15);
-                    display: none; flex-direction: column; border: 1px solid #e5e7eb;
+    // Generate session ID
+    let sessionId = localStorage.getItem('student_chat_session');
+    if (!sessionId) {{
+        sessionId = 'student_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now();
+        localStorage.setItem('student_chat_session', sessionId);
+    }}
+    
+    // Widget HTML template
+    const widgetHTML = `
+        <div id="${{WIDGET_ID}}" style="position: fixed; bottom: 20px; right: 20px; z-index: 9999; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+            <!-- Chat Button -->
+            <div id="chat-toggle" style="
+                width: 60px; 
+                height: 60px; 
+                border-radius: 50%; 
+                background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+                color: white; 
+                border: none; 
+                cursor: pointer; 
+                box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+                display: flex; 
+                align-items: center; 
+                justify-content: center;
+                font-size: 24px;
+                transition: all 0.3s ease;
+                position: relative;
+            ">
+                <span id="chat-icon">💬</span>
+                <span id="close-icon" style="display: none;">✕</span>
+            </div>
+            
+            <!-- Chat Window -->
+            <div id="chat-window" style="
+                position: absolute;
+                bottom: 80px;
+                right: 0;
+                width: 350px;
+                height: 500px;
+                background: white;
+                border-radius: 12px;
+                box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+                display: none;
+                flex-direction: column;
+                overflow: hidden;
+                border: 1px solid #e5e7eb;
+            ">
+                <!-- Header -->
+                <div style="
+                    padding: 16px;
+                    background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+                    color: white;
+                    border-radius: 12px 12px 0 0;
                 ">
-                    <div style="padding: 16px; background: linear-gradient(135deg, #3B82F6, #1D4ED8); color: white; border-radius: 12px 12px 0 0;">
-                        <h3 style="margin: 0; font-size: 16px; font-weight: 600;">${{WIDGET_TITLE}}</h3>
-                        <p style="margin: 4px 0 0 0; font-size: 12px; opacity: 0.9;">Ask me about academic information</p>
-                    </div>
-                    <div id="chat-messages" style="
-                        flex: 1; padding: 16px; overflow-y: auto; background: #f9fafb; max-height: 350px;
+                    <h3 style="margin: 0; font-size: 16px; font-weight: 600;">Student Support</h3>
+                    <p style="margin: 4px 0 0 0; font-size: 12px; opacity: 0.9;">Ask me about academic information</p>
+                </div>
+                
+                <!-- Messages Area -->
+                <div id="chat-messages" style="
+                    flex: 1;
+                    padding: 16px;
+                    overflow-y: auto;
+                    background: #f9fafb;
+                    max-height: 350px;
+                ">
+                    <div style="
+                        background: white;
+                        padding: 12px;
+                        border-radius: 8px;
+                        margin-bottom: 12px;
+                        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
                     ">
-                        <div style="background: white; padding: 12px; border-radius: 8px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-                            <p style="margin: 0; font-size: 14px; color: #374151;">${{WELCOME_MESSAGE}}</p>
-                        </div>
+                        <p style="margin: 0; font-size: 14px; color: #374151;">
+                            Hi! I'm here to help with your academic questions. Ask me about courses, policies, deadlines, and more!
+                        </p>
                     </div>
-                    <div style="padding: 16px; border-top: 1px solid #e5e7eb; background: white;">
-                        <div style="display: flex; gap: 8px;">
-                            <input type="text" id="chat-input" placeholder="Ask a question..." style="
-                                flex: 1; padding: 10px 12px; border: 1px solid #d1d5db; border-radius: 20px;
-                                outline: none; font-size: 14px;
-                            ">
-                            <button id="chat-send" style="
-                                padding: 10px 16px; background: #3B82F6; color: white; border: none;
-                                border-radius: 20px; cursor: pointer; font-size: 14px; font-weight: 500;
-                            ">Send</button>
-                        </div>
+                </div>
+                
+                <!-- Input Area -->
+                <div style="
+                    padding: 16px;
+                    border-top: 1px solid #e5e7eb;
+                    background: white;
+                ">
+                    <div style="display: flex; gap: 8px;">
+                        <input type="text" id="chat-input" placeholder="Ask a question..." style="
+                            flex: 1;
+                            padding: 10px 12px;
+                            border: 1px solid #d1d5db;
+                            border-radius: 20px;
+                            outline: none;
+                            font-size: 14px;
+                        ">
+                        <button id="chat-send" style="
+                            padding: 10px 16px;
+                            background: #3b82f6;
+                            color: white;
+                            border: none;
+                            border-radius: 20px;
+                            cursor: pointer;
+                            font-size: 14px;
+                            font-weight: 500;
+                        ">Send</button>
                     </div>
                 </div>
             </div>
-        `;
-        
-        document.body.appendChild(widget);
-        
-        const chatButton = document.getElementById('chat-button');
-        const chatWindow = document.getElementById('chat-window');
-        const chatInput = document.getElementById('chat-input');
-        const chatSend = document.getElementById('chat-send');
-        const chatMessages = document.getElementById('chat-messages');
-        
-        let isOpen = false;
-        
-        chatButton.addEventListener('click', () => {{
-            isOpen = !isOpen;
-            chatWindow.style.display = isOpen ? 'flex' : 'none';
-            if (isOpen) chatInput.focus();
-        }});
-        
-        async function sendMessage() {{
-            const message = chatInput.value.trim();
-            if (!message) return;
-            
-            addMessage(message, 'user');
-            chatInput.value = '';
-            
-            const typingDiv = addMessage('Typing...', 'bot', true);
-            
-            try {{
-                const response = await fetch(`${{API_BASE_URL}}/chat/student`, {{
-                    method: 'POST',
-                    headers: {{ 'Content-Type': 'application/json' }},
-                    body: JSON.stringify({{ message, session_id: sessionId }})
-                }});
-                
-                const data = await response.json();
-                typingDiv.remove();
-                
-                let botMessage = data.answer;
-                if (data.sources && data.sources.length > 0) {{
-                    botMessage += '\\n\\nSources: ' + 
-                        data.sources.map(s => `Page ${{s.page}}`).join(', ');
-                }}
-                addMessage(botMessage, 'bot');
-                
-            }} catch (error) {{
-                typingDiv.remove();
-                addMessage('Sorry, I encountered an error. Please try again.', 'bot');
-            }}
+        </div>
+    `;
+    
+    // Add widget to page
+    document.body.insertAdjacentHTML('beforeend', widgetHTML);
+    
+    // Get elements
+    const chatToggle = document.getElementById('chat-toggle');
+    const chatWindow = document.getElementById('chat-window');
+    const chatMessages = document.getElementById('chat-messages');
+    const chatInput = document.getElementById('chat-input');
+    const chatSend = document.getElementById('chat-send');
+    const chatIcon = document.getElementById('chat-icon');
+    const closeIcon = document.getElementById('close-icon');
+    
+    let isOpen = false;
+    
+    // Toggle chat window
+    function toggleChat() {{
+        isOpen = !isOpen;
+        if (isOpen) {{
+            chatWindow.style.display = 'flex';
+            chatIcon.style.display = 'none';
+            closeIcon.style.display = 'block';
+            chatInput.focus();
+        }} else {{
+            chatWindow.style.display = 'none';
+            chatIcon.style.display = 'block';
+            closeIcon.style.display = 'none';
         }}
-        
-        function addMessage(text, sender, isTyping = false) {{
-            const messageDiv = document.createElement('div');
-            messageDiv.style.cssText = `
-                margin-bottom: 12px; display: flex; justify-content: ${{sender === 'user' ? 'flex-end' : 'flex-start'}};
-            `;
-            
-            const messageContent = document.createElement('div');
-            messageContent.style.cssText = `
-                max-width: 80%; padding: 10px 12px; border-radius: 12px;
-                background: ${{sender === 'user' ? '#3B82F6' : 'white'}};
-                color: ${{sender === 'user' ? 'white' : '#374151'}};
-                font-size: 14px; line-height: 1.4; white-space: pre-wrap;
-                box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-            `;
-            messageContent.textContent = text;
-            
-            messageDiv.appendChild(messageContent);
-            chatMessages.appendChild(messageDiv);
-            chatMessages.scrollTop = chatMessages.scrollHeight;
-            return messageDiv;
-        }}
-        
-        chatSend.addEventListener('click', sendMessage);
-        chatInput.addEventListener('keypress', (e) => {{
-            if (e.key === 'Enter') sendMessage();
-        }});
-        
-        // Hover effect
-        chatButton.addEventListener('mouseenter', () => {{
-            chatButton.style.transform = 'scale(1.05)';
-        }});
-        chatButton.addEventListener('mouseleave', () => {{
-            chatButton.style.transform = 'scale(1)';
-        }});
     }}
     
-    if (document.readyState === 'loading') {{
-        document.addEventListener('DOMContentLoaded', createWidget);
-    }} else {{
-        createWidget();
+    // Add message to chat
+    function addMessage(message, isUser = false, sources = null) {{
+        const messageDiv = document.createElement('div');
+        messageDiv.style.cssText = `
+            margin-bottom: 12px;
+            display: flex;
+            justify-content: ${{isUser ? 'flex-end' : 'flex-start'}};
+        `;
+        
+        const messageContent = document.createElement('div');
+        messageContent.style.cssText = `
+            max-width: 80%;
+            padding: 10px 12px;
+            border-radius: 12px;
+            background: ${{isUser ? '#3b82f6' : 'white'}};
+            color: ${{isUser ? 'white' : '#374151'}};
+            font-size: 14px;
+            line-height: 1.4;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            white-space: pre-wrap;
+        `;
+        
+        messageContent.textContent = message;
+        
+        // Add sources if available
+        if (!isUser && sources && sources.length > 0) {{
+            const sourcesDiv = document.createElement('div');
+            sourcesDiv.style.cssText = `
+                margin-top: 8px;
+                padding-top: 8px;
+                border-top: 1px solid #e5e7eb;
+                font-size: 11px;
+                color: #6b7280;
+            `;
+            
+            sourcesDiv.innerHTML = '<strong>Sources:</strong> ' + 
+                sources.map(s => `${{s.filename}} (p. ${{s.page}})`).join(', ');
+            
+            messageContent.appendChild(sourcesDiv);
+        }}
+        
+        messageDiv.appendChild(messageContent);
+        chatMessages.appendChild(messageDiv);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
     }}
+    
+    // Show typing indicator
+    function showTyping() {{
+        const typingDiv = document.createElement('div');
+        typingDiv.id = 'typing-indicator';
+        typingDiv.style.cssText = `
+            margin-bottom: 12px;
+            display: flex;
+            justify-content: flex-start;
+        `;
+        
+        typingDiv.innerHTML = `
+            <div style="
+                background: white;
+                padding: 10px 12px;
+                border-radius: 12px;
+                box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+                display: flex;
+                align-items: center;
+                gap: 8px;
+            ">
+                <div style="
+                    width: 8px;
+                    height: 8px;
+                    border-radius: 50%;
+                    background: #9ca3af;
+                    animation: typing 1.4s infinite;
+                "></div>
+                <div style="
+                    width: 8px;
+                    height: 8px;
+                    border-radius: 50%;
+                    background: #9ca3af;
+                    animation: typing 1.4s infinite 0.2s;
+                "></div>
+                <div style="
+                    width: 8px;
+                    height: 8px;
+                    border-radius: 50%;
+                    background: #9ca3af;
+                    animation: typing 1.4s infinite 0.4s;
+                "></div>
+            </div>
+        `;
+        
+        chatMessages.appendChild(typingDiv);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }}
+    
+    // Remove typing indicator
+    function hideTyping() {{
+        const typingIndicator = document.getElementById('typing-indicator');
+        if (typingIndicator) {{
+            typingIndicator.remove();
+        }}
+    }}
+    
+    // Send message
+    async function sendMessage() {{
+        const message = chatInput.value.trim();
+        if (!message) return;
+        
+        // Add user message
+        addMessage(message, true);
+        chatInput.value = '';
+        
+        // Show typing
+        showTyping();
+        
+        try {{
+            const response = await fetch(`${{API_BASE_URL}}/chat/student`, {{
+                method: 'POST',
+                headers: {{
+                    'Content-Type': 'application/json',
+                }},
+                body: JSON.stringify({{
+                    message: message,
+                    session_id: sessionId
+                }})
+            }});
+            
+            const data = await response.json();
+            
+            hideTyping();
+            
+            if (response.ok) {{
+                addMessage(data.answer, false, data.sources);
+            }} else {{
+                addMessage('Sorry, I encountered an error. Please try again.', false);
+            }}
+            
+        }} catch (error) {{
+            hideTyping();
+            addMessage('Sorry, I\\'m having trouble connecting. Please try again later.', false);
+        }}
+    }}
+    
+    // Event listeners
+    chatToggle.addEventListener('click', toggleChat);
+    chatSend.addEventListener('click', sendMessage);
+    chatInput.addEventListener('keypress', (e) => {{
+        if (e.key === 'Enter') {{
+            sendMessage();
+        }}
+    }});
+    
+    // Add CSS animations
+    const style = document.createElement('style');
+    style.textContent = `
+        @keyframes typing {{
+            0%, 60%, 100% {{ transform: translateY(0); }}
+            30% {{ transform: translateY(-10px); }}
+        }}
+        
+        #chat-toggle:hover {{
+            transform: scale(1.05);
+            box-shadow: 0 6px 16px rgba(59, 130, 246, 0.5);
+        }}
+        
+        #chat-input:focus {{
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }}
+        
+        #chat-send:hover {{
+            background: #2563eb;
+        }}
+    `;
+    document.head.appendChild(style);
+    
 }})();
 """
     return widget_js
