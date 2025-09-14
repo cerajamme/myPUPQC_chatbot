@@ -48,6 +48,7 @@ class Settings(BaseSettings):
     allowed_origins: List[str] = [
         "http://localhost:3000",
         "http://localhost:8000",
+        "https://mypupqcchatbot-production.up.railway.app",
         os.getenv("FRONTEND_URL", ""),
         os.getenv("WIDGET_DOMAIN", ""),
     ]
