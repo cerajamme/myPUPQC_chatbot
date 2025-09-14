@@ -4,7 +4,7 @@
     // Configuration
 // In src/api.js, update the API_BASE_URL
     const API_BASE_URL = process.env.NODE_ENV === 'production' 
-    ? 'https://mypupqc-chatbot-backend.onrender.com'  // Your live backend
+    ? 'https://mypupqcchatbot-production.up.railway.app/'  // Your live backend
     : 'http://localhost:8000';
     const WIDGET_ID = 'student-chatbot-widget';
     
