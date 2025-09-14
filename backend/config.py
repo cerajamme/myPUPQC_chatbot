@@ -40,18 +40,9 @@ class Settings(BaseSettings):
     api_version: str = os.getenv("API_VERSION", "1.0.0")
     api_description: str = os.getenv("API_DESCRIPTION", "RAG-powered chatbot platform for student support")
     
-    # URLs - Missing fields that were causing the error
+    # URLs - Fixed fields
     frontend_url: str = os.getenv("FRONTEND_URL", "")
     widget_domain: str = os.getenv("WIDGET_DOMAIN", "")
-    
-    # CORS Settings (for embeddable widgets)
-    allowed_origins: List[str] = [
-        "http://localhost:3000",
-        "http://localhost:8000",
-        "https://mypupqcchatbot-production.up.railway.app",
-        os.getenv("FRONTEND_URL", ""),
-        os.getenv("WIDGET_DOMAIN", ""),
-    ]
     
     # Rate Limiting
     rate_limit_per_minute: int = int(os.getenv("RATE_LIMIT_PER_MINUTE", "30"))
@@ -64,6 +55,26 @@ class Settings(BaseSettings):
     environment: str = os.getenv("ENVIRONMENT", "development")
     debug: bool = os.getenv("DEBUG", "true").lower() == "true"
     log_level: str = os.getenv("LOG_LEVEL", "INFO")
+    
+    # CORS Settings - Fixed implementation
+    @property
+    def allowed_origins(self) -> List[str]:
+        """Generate allowed origins dynamically, filtering out empty values"""
+        origins = [
+            "http://localhost:3000",
+            "http://localhost:8000",
+        ]
+        
+        # Add frontend URL if set
+        if self.frontend_url:
+            origins.append(self.frontend_url)
+        
+        # Add widget domain with https if set
+        if self.widget_domain:
+            origins.append(f"https://{self.widget_domain}")
+        
+        # Remove duplicates and empty strings
+        return list(filter(None, set(origins)))
     
     class Config:
         env_file = ".env"
@@ -156,6 +167,7 @@ if __name__ == "__main__":
         print(f"📁 Upload dir: {settings.upload_dir}")
         print(f"📏 Max file size: {settings.max_file_size_mb}MB")
         print(f"🎯 Student bot: {settings.student_bot_name}")
+        print(f"🔗 Allowed origins: {settings.allowed_origins}")
     except ValueError as e:
         print(f"❌ Configuration error: {e}")
         print("\n🔧 Please check your .env file or environment variables")
