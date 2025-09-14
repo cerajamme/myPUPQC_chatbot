@@ -20,7 +20,7 @@ from models import User, Chatbot, Document as DocModel, Conversation, ChatbotTyp
 logging.basicConfig(level=getattr(logging, settings.log_level))
 logger = logging.getLogger(__name__)
 
-# Validate configuration on startup
+# Validate configuration on startup WORK
 try:
     validate_settings()
     logger.info("Configuration validated")
