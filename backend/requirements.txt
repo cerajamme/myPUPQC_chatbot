@@ -15,13 +15,6 @@ alembic==1.12.1
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
 
-# LlamaIndex and AI (let pip resolve compatible versions)
-llama-index
-llama-index-vector-stores-postgres
-llama-index-llms-gemini
-llama-index-embeddings-huggingface
-sentence-transformers==2.7.0
-
 # PDF Processing
 pypdf==4.0.1
 # PyMuPDF==1.23.5  # Commented out - causes build issues on Render
