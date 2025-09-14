@@ -2,8 +2,7 @@
 builder = "nixpacks"
 
 [deploy]
-startCommand = "python main.py"
-workingDirectory = "/app/backend"
+startCommand = "cd backend && python main.py"
 
 [variables]
 NIXPACKS_PYTHON_VERSION = "3.11"
