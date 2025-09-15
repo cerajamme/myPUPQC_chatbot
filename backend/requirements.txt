@@ -33,3 +33,5 @@ python-slugify==8.0.4
 # Development (optional - remove in production)
 pytest==7.4.3
 pytest-asyncio==0.21.1
+
+google-generativeai
