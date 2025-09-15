@@ -286,12 +286,44 @@ async def upload_student_document(
         raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
 
 @app.get("/admin/student/documents", response_model=List[DocumentInfo])
-async def list_student_documents(current_user: User = Depends(require_admin)):
-    """Get list of documents in student knowledge base"""
+async def list_student_documents(
+    current_user: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """Get list of documents - direct database query, bypasses RAG system"""
     try:
-        rag = get_rag_system()
-        documents = rag.get_student_documents()
-        return [DocumentInfo(**doc) for doc in documents]
+        # Get student chatbot
+        student_bot = db.query(Chatbot).filter(Chatbot.type == ChatbotType.STUDENT).first()
+        if not student_bot:
+            logger.warning("Student chatbot not found")
+            return []
+        
+        # Direct database query - no RAG dependency
+        documents = db.query(DocModel).filter(
+            DocModel.chatbot_id == student_bot.id
+        ).all()
+        
+        logger.info(f"Found {len(documents)} documents in database")
+        
+        result = []
+        for doc in documents:
+            try:
+                doc_info = DocumentInfo(
+                    id=doc.id,
+                    filename=doc.original_filename or doc.filename,
+                    status=doc.status.value if hasattr(doc.status, 'value') else str(doc.status),
+                    pages=doc.page_count,
+                    chunks=doc.chunk_count,
+                    uploaded_at=doc.created_at.isoformat() if doc.created_at else None,
+                    processed_at=doc.processed_at.isoformat() if doc.processed_at else None
+                )
+                result.append(doc_info)
+            except Exception as e:
+                logger.error(f"Error processing document {doc.id}: {e}")
+                continue
+        
+        return result
+        
     except Exception as e:
         logger.error(f"Error listing documents: {e}")
         return []
