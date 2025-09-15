@@ -176,27 +176,70 @@ class SimplifiedRAGSystem:
         return chunks
     
     async def query_student_bot(self, question: str, session_id: str = None) -> Dict:
-        """Answer questions using simple keyword search + Gemini"""
-        try:
-            logger.info(f"🤔 Student question: {question}")
-            start_time = datetime.now()
-            
-            # Get relevant document chunks using simple text search
-            relevant_chunks = self._search_documents(question)
-            
-            if not relevant_chunks:
-                return {
-                    "answer": "I don't have specific information about that in my current knowledge base. For the most accurate information, please contact the student services office.",
-                    "sources": [],
-                    "response_time_ms": 0,
-                    "session_id": session_id
-                }
-            
-            # Create context from relevant chunks
-            context = self._build_context(relevant_chunks)
-            
-            # Generate response using Gemini
-            prompt = f"""
+    """Answer questions using simple keyword search + Gemini with natural conversation handling"""
+    try:
+        logger.info(f"🤔 Student question: {question}")
+        start_time = datetime.now()
+        
+        # Handle conversational messages before document search
+        question_lower = question.lower().strip()
+        
+        # Handle greetings
+        greetings = ['hello', 'hi', 'hey', 'good morning', 'good afternoon', 'good evening', 'howdy']
+        if any(greeting in question_lower for greeting in greetings):
+            return {
+                "answer": "Hello! I'm here to help you with your academic questions. You can ask me about courses, policies, deadlines, graduation requirements, and more. What would you like to know?",
+                "sources": [],
+                "response_time_ms": 50,
+                "session_id": session_id
+            }
+        
+        # Handle thanks/gratitude
+        thanks_words = ['thank', 'thanks', 'appreciate', 'grateful']
+        if any(word in question_lower for word in thanks_words):
+            return {
+                "answer": "You're very welcome! I'm glad I could help. Feel free to ask if you have any other questions about your studies or academic matters.",
+                "sources": [],
+                "response_time_ms": 50,
+                "session_id": session_id
+            }
+        
+        # Handle goodbyes
+        goodbye_words = ['bye', 'goodbye', 'see you', 'farewell', 'take care']
+        if any(word in question_lower for word in goodbye_words):
+            return {
+                "answer": "Goodbye! Have a great day with your studies. Remember, I'm here whenever you need help with academic questions.",
+                "sources": [],
+                "response_time_ms": 50,
+                "session_id": session_id
+            }
+        
+        # Handle how are you / status questions
+        status_questions = ['how are you', 'how do you do', 'what are you', 'who are you']
+        if any(phrase in question_lower for phrase in status_questions):
+            return {
+                "answer": "I'm your student support assistant! I'm here to help you with academic questions by searching through uploaded documents and providing information about courses, policies, and procedures. What can I help you with today?",
+                "sources": [],
+                "response_time_ms": 50,
+                "session_id": session_id
+            }
+        
+        # For actual academic questions, search documents
+        relevant_chunks = self._search_documents(question)
+        
+        if not relevant_chunks:
+            return {
+                "answer": "I don't have specific information about that in my current knowledge base. For the most accurate information, please contact the student services office. You can also try rephrasing your question or asking about courses, policies, or academic procedures.",
+                "sources": [],
+                "response_time_ms": 0,
+                "session_id": session_id
+            }
+        
+        # Create context from relevant chunks
+        context = self._build_context(relevant_chunks)
+        
+        # Generate response using Gemini
+        prompt = f"""
 You are a helpful student support assistant. Answer the question based on the provided context from official student documents.
 
 Context:
@@ -206,44 +249,44 @@ Question: {question}
 
 Please provide a helpful answer based on the context. If specific page numbers are mentioned in the context, include them in your response.
 """
-            
-            response = self.model.generate_content(prompt)
-            answer = response.text
-            
-            # Format sources
-            sources = [
-                {
-                    "page": chunk['page'],
-                    "filename": chunk['filename'],
-                    "chunk_id": chunk['document_id']
-                }
-                for chunk in relevant_chunks
-            ]
-            
-            response_time = (datetime.now() - start_time).total_seconds() * 1000
-            
-            # Log conversation
-            await self._log_conversation(question, answer, sources, response_time, session_id)
-            
-            result = {
-                "answer": answer,
-                "sources": sources,
-                "response_time_ms": int(response_time),
-                "session_id": session_id
+        
+        response = self.model.generate_content(prompt)
+        answer = response.text
+        
+        # Format sources
+        sources = [
+            {
+                "page": chunk['page'],
+                "filename": chunk['filename'],
+                "chunk_id": chunk['document_id']
             }
-            
-            logger.info(f"✅ Response generated in {response_time:.0f}ms")
-            return result
-            
-        except Exception as e:
-            logger.error(f"❌ Error answering question: {e}")
-            return {
-                "answer": "I'm sorry, I'm having trouble processing your question right now. Please try again later.",
-                "sources": [],
-                "response_time_ms": 0,
-                "session_id": session_id,
-                "error": str(e)
-            }
+            for chunk in relevant_chunks
+        ]
+        
+        response_time = (datetime.now() - start_time).total_seconds() * 1000
+        
+        # Log conversation
+        await self._log_conversation(question, answer, sources, response_time, session_id)
+        
+        result = {
+            "answer": answer,
+            "sources": sources,
+            "response_time_ms": int(response_time),
+            "session_id": session_id
+        }
+        
+        logger.info(f"✅ Response generated in {response_time:.0f}ms")
+        return result
+        
+    except Exception as e:
+        logger.error(f"❌ Error answering question: {e}")
+        return {
+            "answer": "I'm sorry, I'm having trouble processing your question right now. Please try again later.",
+            "sources": [],
+            "response_time_ms": 0,
+            "session_id": session_id,
+            "error": str(e)
+        }
     
     def _search_documents(self, question: str, limit: int = 5) -> List[Dict]:
         """Simple keyword-based document search using PostgreSQL full-text search"""
