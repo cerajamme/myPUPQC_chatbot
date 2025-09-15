@@ -1,11 +1,21 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { admin } from '../api';
+import './TestChatStyles.css';
 
 const TestChat = () => {
   const [message, setMessage] = useState('');
   const [conversation, setConversation] = useState([]);
   const [loading, setLoading] = useState(false);
   const [sessionId] = useState(() => `test_${Date.now()}`);
+  const messagesEndRef = useRef(null);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [conversation, loading]);
 
   const handleSendMessage = async () => {
     if (!message.trim()) return;
@@ -62,187 +72,141 @@ const TestChat = () => {
     });
   };
 
-  return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-        <h2 style={{ fontSize: '20px', fontWeight: '600', color: '#1f2937' }}>
-          Test Student Chatbot
-        </h2>
-        {conversation.length > 0 && (
-          <button 
-            onClick={clearConversation}
-            className="btn"
-            style={{ 
-              padding: '8px 16px', 
-              fontSize: '14px',
-              backgroundColor: '#f3f4f6',
-              color: '#6b7280'
-            }}
-          >
-            Clear Chat
-          </button>
-        )}
-      </div>
+  const setSampleQuestion = (question) => {
+    setMessage(question);
+  };
 
-      {/* Chat Window */}
-      <div style={{
-        height: '400px',
-        border: '1px solid #e5e7eb',
-        borderRadius: '8px',
-        backgroundColor: '#f9fafb',
-        padding: '16px',
-        overflowY: 'auto',
-        marginBottom: '16px'
-      }}>
-        {conversation.length === 0 ? (
-          <div style={{ textAlign: 'center', color: '#6b7280', marginTop: '160px' }}>
-            <p>Start a conversation with your student chatbot</p>
-            <p style={{ fontSize: '14px', marginTop: '8px' }}>
-              Try asking about uploaded documents
-            </p>
-          </div>
-        ) : (
-          conversation.map((msg, index) => (
-            <div key={index} style={{
-              marginBottom: '16px',
-              display: 'flex',
-              justifyContent: msg.type === 'user' ? 'flex-end' : 'flex-start'
-            }}>
-              <div style={{
-                maxWidth: '80%',
-                padding: '12px 16px',
-                borderRadius: '12px',
-                backgroundColor: msg.type === 'user' ? '#3b82f6' : '#ffffff',
-                color: msg.type === 'user' ? '#ffffff' : '#1f2937',
-                border: msg.type === 'bot' ? '1px solid #e5e7eb' : 'none'
-              }}>
-                <p style={{ margin: 0, lineHeight: '1.5' }}>{msg.content}</p>
-                
-                {/* Sources for bot messages */}
-                {msg.type === 'bot' && msg.sources && msg.sources.length > 0 && (
-                  <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid #e5e7eb' }}>
-                    <p style={{ fontSize: '12px', color: '#6b7280', margin: '0 0 4px 0' }}>Sources:</p>
-                    {msg.sources.map((source, idx) => (
-                      <span key={idx} style={{
-                        fontSize: '11px',
-                        backgroundColor: '#f3f4f6',
-                        color: '#374151',
-                        padding: '2px 6px',
-                        borderRadius: '4px',
-                        marginRight: '4px',
-                        display: 'inline-block'
-                      }}>
-                        {source.filename} (p. {source.page})
-                      </span>
-                    ))}
+  return (
+    <div className="test-chat-wrapper">
+      <div className="test-chat-container">
+        {/* Header */}
+        <div className="chat-header">
+          <h2 className="chat-title">
+            <svg className="chat-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+            </svg>
+            Test Student Chatbot
+          </h2>
+          
+          {conversation.length > 0 && (
+            <button onClick={clearConversation} className="clear-button">
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+              Clear Chat
+            </button>
+          )}
+        </div>
+
+        {/* Chat Window */}
+        <div className="chat-window">
+          <div className="chat-messages">
+            {conversation.length === 0 ? (
+              <div className="chat-empty">
+                <svg className="empty-chat-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                </svg>
+                <h3 className="empty-title">Start a conversation with your student chatbot</h3>
+                <p className="empty-subtitle">Try asking about uploaded documents</p>
+              </div>
+            ) : (
+              <>
+                {conversation.map((msg, index) => (
+                  <div key={index} className={`message-container ${msg.type}`}>
+                    <div className={`message-bubble ${msg.type} ${msg.error ? 'error' : ''}`}>
+                      <p className="message-content">{msg.content}</p>
+                      
+                      {/* Sources for bot messages */}
+                      {msg.type === 'bot' && msg.sources && msg.sources.length > 0 && (
+                        <div className="message-sources">
+                          <p className="sources-label">Sources:</p>
+                          <div className="source-tags">
+                            {msg.sources.map((source, idx) => (
+                              <span key={idx} className="source-tag">
+                                {source.filename} (p. {source.page})
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Message metadata */}
+                      <div className="message-meta">
+                        <span className="message-time">{formatTime(msg.timestamp)}</span>
+                        {msg.type === 'bot' && msg.responseTime && (
+                          <span className="response-time">{msg.responseTime}ms</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+
+                {/* Loading indicator */}
+                {loading && (
+                  <div className="loading-message">
+                    <div className="loading-bubble">
+                      <div className="loading-spinner"></div>
+                      <span className="loading-text">Thinking...</span>
+                    </div>
                   </div>
                 )}
+                
+                <div ref={messagesEndRef} />
+              </>
+            )}
+          </div>
+        </div>
 
-                {/* Response time for bot messages */}
-                {msg.type === 'bot' && msg.responseTime && (
-                  <p style={{ 
-                    fontSize: '11px', 
-                    color: '#9ca3af', 
-                    margin: '4px 0 0 0',
-                    textAlign: 'right'
-                  }}>
-                    {msg.responseTime}ms
-                  </p>
-                )}
+        {/* Input Section */}
+        <div className="chat-input-section">
+          <div className="input-container">
+            <textarea
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              onKeyPress={handleKeyPress}
+              placeholder="Ask a question about your uploaded documents..."
+              className="message-textarea"
+              disabled={loading}
+              rows={1}
+            />
+            <button
+              onClick={handleSendMessage}
+              disabled={!message.trim() || loading}
+              className="send-button"
+            >
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+              </svg>
+              Send
+            </button>
+          </div>
 
-                {/* Timestamp */}
-                <p style={{ 
-                  fontSize: '11px', 
-                  color: msg.type === 'user' ? '#bfdbfe' : '#9ca3af',
-                  margin: '4px 0 0 0',
-                  textAlign: 'right'
-                }}>
-                  {formatTime(msg.timestamp)}
-                </p>
-              </div>
-            </div>
-          ))
-        )}
-
-        {/* Loading indicator */}
-        {loading && (
-          <div style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: '16px' }}>
-            <div style={{
-              padding: '12px 16px',
-              borderRadius: '12px',
-              backgroundColor: '#ffffff',
-              border: '1px solid #e5e7eb'
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center' }}>
-                <div className="loading-spinner" style={{ width: '16px', height: '16px', marginRight: '8px' }}></div>
-                <span style={{ color: '#6b7280', fontSize: '14px' }}>Thinking...</span>
-              </div>
+          {/* Sample Questions */}
+          <div className="sample-questions">
+            <p className="sample-title">
+              <svg className="sample-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+              </svg>
+              Sample questions to try:
+            </p>
+            <div className="sample-buttons">
+              {[
+                "What are the graduation requirements?",
+                "When is the deadline for course registration?",
+                "How do I apply for financial aid?",
+                "What documents do I need for enrollment?"
+              ].map((question, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => setSampleQuestion(question)}
+                  className="sample-button"
+                  disabled={loading}
+                >
+                  {question}
+                </button>
+              ))}
             </div>
           </div>
-        )}
-      </div>
-
-      {/* Input Area */}
-      <div style={{ display: 'flex', gap: '8px' }}>
-        <textarea
-          value={message}
-          onChange={(e) => setMessage(e.target.value)}
-          onKeyPress={handleKeyPress}
-          placeholder="Ask a question about your uploaded documents..."
-          style={{
-            flex: 1,
-            padding: '12px',
-            border: '1px solid #d1d5db',
-            borderRadius: '6px',
-            resize: 'none',
-            minHeight: '50px',
-            fontFamily: 'inherit'
-          }}
-          disabled={loading}
-        />
-        <button
-          onClick={handleSendMessage}
-          disabled={!message.trim() || loading}
-          className="btn btn-primary"
-          style={{
-            padding: '12px 20px',
-            height: 'fit-content',
-            opacity: (!message.trim() || loading) ? 0.6 : 1
-          }}
-        >
-          Send
-        </button>
-      </div>
-
-      {/* Sample Questions */}
-      <div style={{ marginTop: '16px', padding: '12px', backgroundColor: '#f0f9ff', borderRadius: '6px' }}>
-        <p style={{ fontSize: '14px', fontWeight: '500', color: '#0369a1', marginBottom: '8px' }}>
-          Sample questions to try:
-        </p>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-          {[
-            "What are the graduation requirements?",
-            "When is the deadline for course registration?",
-            "How do I apply for financial aid?",
-            "What documents do I need for enrollment?"
-          ].map((question, idx) => (
-            <button
-              key={idx}
-              onClick={() => setMessage(question)}
-              style={{
-                fontSize: '12px',
-                padding: '4px 8px',
-                backgroundColor: '#ffffff',
-                border: '1px solid #bae6fd',
-                borderRadius: '4px',
-                color: '#0369a1',
-                cursor: 'pointer'
-              }}
-              disabled={loading}
-            >
-              {question}
-            </button>
-          ))}
         </div>
       </div>
     </div>
