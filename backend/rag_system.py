@@ -2,114 +2,35 @@ import os
 import logging
 from typing import List, Dict, Optional
 from datetime import datetime
-from urllib.parse import urlparse
-
-# LlamaIndex imports
-from llama_index.core import VectorStoreIndex, SimpleDirectoryReader, Document
-from llama_index.vector_stores.postgres import PGVectorStore
-from llama_index.llms.gemini import Gemini
-from llama_index.embeddings.huggingface import HuggingFaceEmbedding
-from llama_index.core.node_parser import SimpleNodeParser
-from llama_index.core import Settings
-
-# Database imports
+import google.generativeai as genai
+import pypdf
 from sqlalchemy.orm import Session
 from database import SessionLocal
 from models import Chatbot, Document as DocModel, DocumentChunk, ChatbotType, DocumentStatus
-from config import settings, STUDENT_SYSTEM_PROMPT, STUDENT_NO_CONTEXT_RESPONSE
+from config import settings
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-class StudentRAGSystem:
-    """RAG system specifically designed for student support chatbot using LlamaIndex"""
+class SimplifiedRAGSystem:
+    """Lightweight RAG system that works within free hosting constraints"""
     
     def __init__(self):
-        self.embeddings = None
-        self.vector_store = None
-        self.llm = None
-        self.index = None
-        self.query_engine = None
-        self.node_parser = None
-        self._initialize_components()
+        self._initialize_gemini()
     
-    def _initialize_components(self):
-        """Initialize LlamaIndex components"""
+    def _initialize_gemini(self):
+        """Initialize Gemini API client"""
         try:
-            # Initialize embeddings model
-            self.embeddings = HuggingFaceEmbedding(
-                model_name=settings.embedding_model,
-                device='cpu'
-            )
-            logger.info(f"✅ Embeddings model loaded: {settings.embedding_model}")
-            
-            # Initialize node parser (text splitter)
-            self.node_parser = SimpleNodeParser.from_defaults(
-                chunk_size=settings.chunk_size,
-                chunk_overlap=settings.chunk_overlap
-            )
-            logger.info(f"✅ Node parser configured: {settings.chunk_size} chars")
-            
-            # Initialize Gemini LLM
-            self.llm = Gemini(
-                api_key=settings.gemini_api_key,
-                model="gemini-1.5-flash",
-                temperature=0.1
-            )
-            logger.info("✅ Gemini LLM initialized")
-            
-            # Set global settings
-            Settings.embed_model = self.embeddings
-            Settings.llm = self.llm
-            Settings.node_parser = self.node_parser
-            
-            # Initialize vector store connection
-            self._setup_vectorstore()
-            
+            genai.configure(api_key=settings.gemini_api_key)
+            self.model = genai.GenerativeModel('gemini-1.5-flash')
+            logger.info("✅ Gemini API initialized")
         except Exception as e:
-            logger.error(f"❌ Error initializing RAG components: {e}")
-            raise
-    
-    def _setup_vectorstore(self):
-        """Setup PGVector connection for student documents"""
-        try:
-            # Parse database URL
-            db_url = urlparse(settings.database_url.replace("postgresql+psycopg://", "postgresql://"))
-            
-            # Create vectorstore connection
-            self.vector_store = PGVectorStore.from_params(
-                database=db_url.path[1:],  # Remove leading '/'
-                host=db_url.hostname,
-                password=db_url.password,
-                port=db_url.port or 5432,
-                user=db_url.username,
-                table_name="student_vectors",
-                embed_dim=384,  # Dimension for all-MiniLM-L6-v2
-                hnsw_kwargs={"hnsw_m": 16, "hnsw_ef_construction": 64, "hnsw_ef_search": 40}
-            )
-            logger.info("✅ Vector store connected")
-            
-            # Create index from vector store
-            self.index = VectorStoreIndex.from_vector_store(
-                vector_store=self.vector_store,
-                embed_model=self.embeddings
-            )
-            
-            # Create query engine
-            self.query_engine = self.index.as_query_engine(
-                llm=self.llm,
-                similarity_top_k=settings.similarity_top_k,
-                response_mode="compact"
-            )
-            logger.info("✅ Query engine created")
-            
-        except Exception as e:
-            logger.error(f"❌ Error setting up vector store: {e}")
+            logger.error(f"❌ Error initializing Gemini: {e}")
             raise
     
     async def process_pdf(self, file_path: str, filename: str, chatbot_id: int) -> Dict:
-        """Process PDF and add to student knowledge base"""
+        """Process PDF and store in database with simple text extraction"""
         db = SessionLocal()
         doc_record = None
         
@@ -129,48 +50,43 @@ class StudentRAGSystem:
             
             logger.info(f"📄 Processing PDF: {filename}")
             
-            # Load PDF with LlamaIndex
-            documents = SimpleDirectoryReader(input_files=[file_path]).load_data()
+            # Extract text from PDF using pypdf
+            text_content = ""
+            page_count = 0
             
-            if not documents:
-                raise ValueError("No content extracted from PDF")
+            with open(file_path, 'rb') as file:
+                pdf_reader = pypdf.PdfReader(file)
+                page_count = len(pdf_reader.pages)
+                
+                for page_num, page in enumerate(pdf_reader.pages):
+                    try:
+                        page_text = page.extract_text()
+                        if page_text.strip():
+                            text_content += f"\n--- Page {page_num + 1} ---\n{page_text}\n"
+                    except Exception as e:
+                        logger.warning(f"Could not extract text from page {page_num + 1}: {e}")
             
-            # Update page count
-            doc_record.page_count = len(documents)
+            if not text_content.strip():
+                raise ValueError("No text content extracted from PDF")
             
-            # Parse documents into nodes
-            nodes = self.node_parser.get_nodes_from_documents(documents)
-            logger.info(f"📝 Created {len(nodes)} chunks from {len(documents)} pages")
+            # Simple text chunking (split by pages or size)
+            chunks = self._create_text_chunks(text_content, filename)
             
-            # Add metadata to nodes
-            for i, node in enumerate(nodes):
-                node.metadata.update({
-                    "document_id": doc_record.id,
-                    "chatbot_id": chatbot_id,
-                    "chatbot_type": "student",
-                    "filename": filename,
-                    "chunk_index": i,
-                    "page": node.metadata.get("page_label", 1)
-                })
-            
-            # Add to vector store
-            self.index.insert_nodes(nodes)
-            logger.info(f"🔍 Added {len(nodes)} chunks to vector store")
-            
-            # Save chunk records to database
-            for i, node in enumerate(nodes):
+            # Save chunks to database
+            for i, chunk_data in enumerate(chunks):
                 chunk_record = DocumentChunk(
                     document_id=doc_record.id,
                     chunk_index=i,
-                    text_content=node.text,
-                    page_number=node.metadata.get("page", 1),
-                    embedding_id=node.node_id
+                    text_content=chunk_data['text'],
+                    page_number=chunk_data['page'],
+                    embedding_id=f"chunk_{doc_record.id}_{i}"
                 )
                 db.add(chunk_record)
             
-            # Update document status
+            # Update document record
             doc_record.status = DocumentStatus.READY
-            doc_record.chunk_count = len(nodes)
+            doc_record.page_count = page_count
+            doc_record.chunk_count = len(chunks)
             doc_record.processed_at = datetime.utcnow()
             
             db.commit()
@@ -183,8 +99,8 @@ class StudentRAGSystem:
                 "status": "success",
                 "document_id": doc_record.id,
                 "filename": filename,
-                "pages": len(documents),
-                "chunks": len(nodes),
+                "pages": page_count,
+                "chunks": len(chunks),
                 "message": f"Successfully processed {filename}"
             }
             
@@ -213,37 +129,103 @@ class StudentRAGSystem:
         finally:
             db.close()
     
+    def _create_text_chunks(self, text_content: str, filename: str) -> List[Dict]:
+        """Create simple text chunks without vector embeddings"""
+        chunks = []
+        lines = text_content.split('\n')
+        current_chunk = ""
+        current_page = 1
+        
+        for line in lines:
+            # Check for page markers
+            if line.strip().startswith("--- Page "):
+                if current_chunk.strip():
+                    chunks.append({
+                        'text': current_chunk.strip(),
+                        'page': current_page,
+                        'filename': filename
+                    })
+                    current_chunk = ""
+                
+                # Extract page number
+                try:
+                    current_page = int(line.split("Page ")[1].split(" ---")[0])
+                except:
+                    current_page += 1
+                continue
+            
+            current_chunk += line + "\n"
+            
+            # Create chunk if it gets too long
+            if len(current_chunk) > settings.chunk_size:
+                chunks.append({
+                    'text': current_chunk.strip(),
+                    'page': current_page,
+                    'filename': filename
+                })
+                current_chunk = ""
+        
+        # Add final chunk
+        if current_chunk.strip():
+            chunks.append({
+                'text': current_chunk.strip(),
+                'page': current_page,
+                'filename': filename
+            })
+        
+        return chunks
+    
     async def query_student_bot(self, question: str, session_id: str = None) -> Dict:
-        """Answer student questions using RAG"""
+        """Answer questions using simple keyword search + Gemini"""
         try:
             logger.info(f"🤔 Student question: {question}")
-            
-            if not self.query_engine:
-                raise ValueError("Query engine not initialized")
-            
-            # Query the RAG system
             start_time = datetime.now()
-            response = self.query_engine.query(question)
+            
+            # Get relevant document chunks using simple text search
+            relevant_chunks = self._search_documents(question)
+            
+            if not relevant_chunks:
+                return {
+                    "answer": "I don't have specific information about that in my current knowledge base. For the most accurate information, please contact the student services office.",
+                    "sources": [],
+                    "response_time_ms": 0,
+                    "session_id": session_id
+                }
+            
+            # Create context from relevant chunks
+            context = self._build_context(relevant_chunks)
+            
+            # Generate response using Gemini
+            prompt = f"""
+You are a helpful student support assistant. Answer the question based on the provided context from official student documents.
+
+Context:
+{context}
+
+Question: {question}
+
+Please provide a helpful answer based on the context. If specific page numbers are mentioned in the context, include them in your response.
+"""
+            
+            response = self.model.generate_content(prompt)
+            answer = response.text
+            
+            # Format sources
+            sources = [
+                {
+                    "page": chunk['page'],
+                    "filename": chunk['filename'],
+                    "chunk_id": chunk['document_id']
+                }
+                for chunk in relevant_chunks
+            ]
+            
             response_time = (datetime.now() - start_time).total_seconds() * 1000
             
-            # Extract answer and sources
-            answer = str(response)
-            source_nodes = response.source_nodes if hasattr(response, 'source_nodes') else []
-            
-            # Format sources with page numbers
-            sources = []
-            for node in source_nodes:
-                sources.append({
-                    "page": node.metadata.get("page", "Unknown"),
-                    "filename": node.metadata.get("filename", "Unknown"),
-                    "chunk_id": node.metadata.get("document_id", "Unknown"),
-                    "confidence": node.score if hasattr(node, 'score') else 0.8
-                })
-            
-            # Log the interaction
+            # Log conversation
             await self._log_conversation(question, answer, sources, response_time, session_id)
             
-            response_dict = {
+            result = {
                 "answer": answer,
                 "sources": sources,
                 "response_time_ms": int(response_time),
@@ -251,16 +233,65 @@ class StudentRAGSystem:
             }
             
             logger.info(f"✅ Response generated in {response_time:.0f}ms")
-            return response_dict
+            return result
             
         except Exception as e:
             logger.error(f"❌ Error answering question: {e}")
             return {
-                "answer": STUDENT_NO_CONTEXT_RESPONSE,
+                "answer": "I'm sorry, I'm having trouble processing your question right now. Please try again later.",
                 "sources": [],
                 "response_time_ms": 0,
+                "session_id": session_id,
                 "error": str(e)
             }
+    
+    def _search_documents(self, question: str, limit: int = 5) -> List[Dict]:
+        """Simple keyword-based document search using PostgreSQL full-text search"""
+        db = SessionLocal()
+        try:
+            # Get student chatbot
+            student_bot = db.query(Chatbot).filter(Chatbot.type == ChatbotType.STUDENT).first()
+            if not student_bot:
+                return []
+            
+            # Simple keyword search in document chunks
+            search_terms = question.lower().split()
+            
+            # Query document chunks
+            chunks = db.query(DocumentChunk).join(DocModel).filter(
+                DocModel.chatbot_id == student_bot.id,
+                DocModel.status == DocumentStatus.READY
+            ).all()
+            
+            # Score chunks based on keyword matches
+            scored_chunks = []
+            for chunk in chunks:
+                text_lower = chunk.text_content.lower()
+                score = sum(1 for term in search_terms if term in text_lower)
+                
+                if score > 0:
+                    scored_chunks.append({
+                        'score': score,
+                        'text': chunk.text_content,
+                        'page': chunk.page_number,
+                        'document_id': chunk.document_id,
+                        'filename': chunk.document.original_filename
+                    })
+            
+            # Sort by score and return top results
+            scored_chunks.sort(key=lambda x: x['score'], reverse=True)
+            return scored_chunks[:limit]
+        
+        finally:
+            db.close()
+    
+    def _build_context(self, chunks: List[Dict]) -> str:
+        """Build context string from relevant chunks"""
+        context_parts = []
+        for chunk in chunks:
+            context_parts.append(f"[Page {chunk['page']} - {chunk['filename']}]\n{chunk['text']}\n")
+        
+        return "\n---\n".join(context_parts)
     
     async def _log_conversation(self, question: str, answer: str, sources: List, response_time: float, session_id: str):
         """Log conversation for analytics"""
@@ -269,11 +300,7 @@ class StudentRAGSystem:
         
         db = SessionLocal()
         try:
-            # Get student chatbot
-            student_bot = db.query(Chatbot).filter(
-                Chatbot.type == ChatbotType.STUDENT
-            ).first()
-            
+            student_bot = db.query(Chatbot).filter(Chatbot.type == ChatbotType.STUDENT).first()
             if student_bot:
                 from models import Conversation
                 conversation = Conversation(
@@ -282,14 +309,12 @@ class StudentRAGSystem:
                     user_message=question,
                     bot_response=answer,
                     response_time_ms=int(response_time),
-                    sources_used=str(sources)  # JSON string
+                    sources_used=str(sources)
                 )
                 db.add(conversation)
                 db.commit()
-        
         except Exception as e:
             logger.error(f"Error logging conversation: {e}")
-        
         finally:
             db.close()
     
@@ -297,16 +322,11 @@ class StudentRAGSystem:
         """Get list of documents in student knowledge base"""
         db = SessionLocal()
         try:
-            student_bot = db.query(Chatbot).filter(
-                Chatbot.type == ChatbotType.STUDENT
-            ).first()
-            
+            student_bot = db.query(Chatbot).filter(Chatbot.type == ChatbotType.STUDENT).first()
             if not student_bot:
                 return []
             
-            documents = db.query(DocModel).filter(
-                DocModel.chatbot_id == student_bot.id
-            ).all()
+            documents = db.query(DocModel).filter(DocModel.chatbot_id == student_bot.id).all()
             
             return [
                 {
@@ -320,7 +340,6 @@ class StudentRAGSystem:
                 }
                 for doc in documents
             ]
-        
         finally:
             db.close()
     
@@ -332,69 +351,50 @@ class StudentRAGSystem:
             if not doc:
                 return False
             
-            # TODO: Remove from vector store using node IDs
-            # For now, just mark as deleted in database
+            # Delete associated chunks
+            db.query(DocumentChunk).filter(DocumentChunk.document_id == document_id).delete()
             
+            # Delete document record
             db.delete(doc)
             db.commit()
+            
             logger.info(f"🗑️ Deleted document: {doc.original_filename}")
             return True
         
         except Exception as e:
             logger.error(f"Error deleting document: {e}")
             return False
-        
         finally:
             db.close()
     
     def health_check(self) -> Dict:
-        """Check if RAG system is working properly"""
+        """Check if simplified RAG system is working"""
         try:
-            # Test embedding
-            test_text = "This is a test"
-            embedding = self.embeddings.get_text_embedding(test_text)
+            # Test Gemini API
+            test_response = self.model.generate_content("Test")
             
-            # Test query engine
-            if self.query_engine:
-                test_response = self.query_engine.query("test")
+            # Count documents
+            doc_count = len(self.get_student_documents())
             
             return {
                 "status": "healthy",
-                "embeddings": "working",
-                "vectorstore": "connected",
-                "llm": "ready",
-                "documents": len(self.get_student_documents())
+                "llm": "gemini-ready",
+                "search": "keyword-based",
+                "documents": doc_count,
+                "type": "simplified"
             }
-        
         except Exception as e:
             return {
                 "status": "error",
                 "error": str(e)
             }
 
-# Global RAG system instance
-student_rag = None
+# Global simplified RAG system
+simplified_rag = None
 
-def get_student_rag() -> StudentRAGSystem:
-    """Get or create student RAG system instance"""
-    global student_rag
-    if student_rag is None:
-        student_rag = StudentRAGSystem()
-    return student_rag
-
-if __name__ == "__main__":
-    """Test the RAG system"""
-    async def test_rag():
-        rag = StudentRAGSystem()
-        
-        # Health check
-        health = rag.health_check()
-        print(f"Health: {health}")
-        
-        # Test query
-        result = await rag.query_student_bot("What are the graduation requirements?")
-        print(f"Test query result: {result}")
-    
-    # Run test
-    import asyncio
-    asyncio.run(test_rag())
+def get_student_rag() -> SimplifiedRAGSystem:
+    """Get or create simplified RAG system instance"""
+    global simplified_rag
+    if simplified_rag is None:
+        simplified_rag = SimplifiedRAGSystem()
+    return simplified_rag
