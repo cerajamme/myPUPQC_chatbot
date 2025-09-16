@@ -41,6 +41,9 @@ export const admin = {
   deleteDocument: (id) => api.delete(`/admin/student/documents/${id}`),
   testChat: (message, sessionId) => api.post('/admin/student/test-chat', { message, session_id: sessionId }),
   getAnalytics: () => api.get('/admin/student/analytics'),
+  getChatOptions: () => api.get('/api/chat-options'),
+  createChatOption: (optionData) => api.post('/api/admin/chat-options', optionData),
+  deleteChatOption: (optionId) => api.delete(`/api/admin/chat-options/${optionId}`)
 };
 
 export default api;

@@ -1,0 +1,454 @@
+/* AnalyticsStyles.css - Mobile-First Responsive Design */
+
+/* Main Container with Social Media Style Layout */
+.analytics-wrapper {
+    min-height: 100vh;
+    background: #f8fafc;
+    padding: 0.5rem;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+  }
+  
+  .analytics-container {
+    width: 100%;
+    max-width: 100%;
+    background: white;
+    border-radius: 0.75rem;
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+    border: 1px solid #e5e7eb;
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+  
+  /* Header Section */
+  .analytics-header {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    align-items: flex-start;
+  }
+  
+  .analytics-title {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: #1f2937;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  
+  .analytics-icon {
+    width: 1.25rem;
+    height: 1.25rem;
+    color: #7c2d12;
+  }
+  
+  .refresh-button {
+    background: linear-gradient(135deg, #7c2d12 0%, #991b1b 100%);
+    color: white;
+    border: none;
+    border-radius: 0.5rem;
+    padding: 0.75rem 1rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+  }
+  
+  .refresh-button:hover {
+    background: linear-gradient(135deg, #6b2e11 0%, #7f1d1d 100%);
+  }
+  
+  .refresh-button svg {
+    width: 1rem;
+    height: 1rem;
+  }
+  
+  /* Loading State */
+  .loading-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 3rem 1rem;
+    text-align: center;
+  }
+  
+  .loading-spinner {
+    width: 2rem;
+    height: 2rem;
+    border: 3px solid #e5e7eb;
+    border-radius: 50%;
+    border-top-color: #7c2d12;
+    animation: spin 1s linear infinite;
+    margin-bottom: 1rem;
+  }
+  
+  .loading-text {
+    color: #6b7280;
+    font-size: 0.875rem;
+    margin: 0;
+  }
+  
+  /* Error State */
+  .error-card {
+    background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
+    border: 1px solid #fecaca;
+    border-radius: 0.75rem;
+    padding: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+  
+  .error-icon {
+    width: 1.25rem;
+    height: 1.25rem;
+    color: #dc2626;
+    flex-shrink: 0;
+  }
+  
+  .error-text {
+    color: #dc2626;
+    font-size: 0.875rem;
+    margin: 0;
+  }
+  
+  /* Stats Cards Grid */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+  
+  .stat-card {
+    background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+    border: 1px solid #e2e8f0;
+    border-radius: 0.75rem;
+    padding: 1.5rem;
+    text-align: center;
+    transition: all 0.2s ease;
+  }
+  
+  .stat-card:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  }
+  
+  .stat-value {
+    font-size: 2rem;
+    font-weight: 700;
+    margin: 0 0 0.5rem 0;
+    line-height: 1;
+  }
+  
+  .stat-value.primary {
+    color: #3b82f6;
+  }
+  
+  .stat-value.success {
+    color: #059669;
+  }
+  
+  .stat-value.warning {
+    color: #d97706;
+  }
+  
+  .stat-value.danger {
+    color: #dc2626;
+  }
+  
+  .stat-label {
+    color: #6b7280;
+    font-size: 0.875rem;
+    font-weight: 500;
+    margin: 0;
+  }
+  
+  /* Main Content Card */
+  .content-card {
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 0.75rem;
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+  
+  .content-card-title {
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: #1f2937;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  
+  .content-card-icon {
+    width: 1.125rem;
+    height: 1.125rem;
+    color: #7c2d12;
+  }
+  
+  /* Empty State */
+  .empty-state {
+    text-align: center;
+    padding: 3rem 1rem;
+    background: #f9fafb;
+    border-radius: 0.75rem;
+    border: 1px dashed #d1d5db;
+  }
+  
+  .empty-icon {
+    width: 3rem;
+    height: 3rem;
+    color: #9ca3af;
+    margin: 0 auto 1rem auto;
+  }
+  
+  .empty-title {
+    font-size: 1.125rem;
+    font-weight: 500;
+    color: #374151;
+    margin: 0 0 0.5rem 0;
+  }
+  
+  .empty-description {
+    color: #6b7280;
+    font-size: 0.875rem;
+    margin: 0;
+    line-height: 1.5;
+  }
+  
+  /* Conversations List */
+  .conversations-list {
+    max-height: 25rem;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+  
+  .conversation-item {
+    background: #fafafa;
+    border: 1px solid #e5e7eb;
+    border-radius: 0.5rem;
+    padding: 1rem;
+    transition: all 0.2s ease;
+  }
+  
+  .conversation-item:hover {
+    background: #f3f4f6;
+    border-color: #d1d5db;
+  }
+  
+  .conversation-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 0.75rem;
+    margin-bottom: 0.5rem;
+  }
+  
+  .conversation-question {
+    font-weight: 500;
+    color: #1f2937;
+    font-size: 0.875rem;
+    margin: 0;
+    line-height: 1.4;
+    flex: 1;
+  }
+  
+  .conversation-meta {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.25rem;
+    flex-shrink: 0;
+  }
+  
+  .response-time-badge {
+    background: #f0f9ff;
+    color: #0369a1;
+    font-size: 0.75rem;
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.375rem;
+    font-weight: 500;
+  }
+  
+  .conversation-timestamp {
+    color: #6b7280;
+    font-size: 0.75rem;
+    font-weight: 400;
+  }
+  
+  .conversation-preview {
+    color: #6b7280;
+    font-size: 0.8125rem;
+    margin: 0;
+    line-height: 1.4;
+  }
+  
+  /* Tips Card */
+  .tips-card {
+    background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+    border: 1px solid #bae6fd;
+    border-radius: 0.75rem;
+    padding: 1.5rem;
+  }
+  
+  .tips-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #0369a1;
+    margin: 0 0 1rem 0;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  
+  .tips-icon {
+    width: 1rem;
+    height: 1rem;
+  }
+  
+  .tips-list {
+    margin: 0;
+    padding-left: 1.25rem;
+    color: #0c4a6e;
+  }
+  
+  .tips-list li {
+    margin-bottom: 0.5rem;
+    font-size: 0.875rem;
+    line-height: 1.5;
+  }
+  
+  .tips-list li:last-child {
+    margin-bottom: 0;
+  }
+  
+  /* Animations */
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+  
+  @keyframes fadeInUp {
+    from {
+      opacity: 0;
+      transform: translateY(1rem);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  
+  .stat-card,
+  .content-card,
+  .tips-card {
+    animation: fadeInUp 0.3s ease-out;
+  }
+  
+  /* Scrollbar Styling */
+  .conversations-list::-webkit-scrollbar {
+    width: 0.25rem;
+  }
+  
+  .conversations-list::-webkit-scrollbar-track {
+    background: #f1f5f9;
+    border-radius: 0.25rem;
+  }
+  
+  .conversations-list::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 0.25rem;
+  }
+  
+  .conversations-list::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+  }
+  
+  /* Responsive Design */
+  @media (min-width: 640px) {
+    .analytics-wrapper {
+      padding: 1rem;
+    }
+    
+    .analytics-container {
+      padding: 1.5rem;
+    }
+    
+    .analytics-header {
+      flex-direction: row;
+      justify-content: space-between;
+      align-items: center;
+    }
+    
+    .stats-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .conversation-meta {
+      flex-direction: row;
+      align-items: center;
+      gap: 0.5rem;
+    }
+  }
+  
+  @media (min-width: 768px) {
+    .analytics-container {
+      max-width: 48rem;
+    }
+    
+    .analytics-title {
+      font-size: 1.5rem;
+    }
+    
+    .stats-grid {
+      grid-template-columns: repeat(3, 1fr);
+    }
+    
+    .stat-value {
+      font-size: 2.5rem;
+    }
+  }
+  
+  @media (min-width: 1024px) {
+    .analytics-wrapper {
+      padding: 1rem 2rem;
+    }
+    
+    .analytics-container {
+      max-width: 56rem;
+      padding: 2rem;
+    }
+    
+    .stats-grid {
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1.5rem;
+    }
+    
+    .conversations-list {
+      max-height: 30rem;
+    }
+  }
+  
+  @media (min-width: 1280px) {
+    .analytics-container {
+      max-width: 64rem;
+    }
+    
+    .stats-grid {
+      gap: 2rem;
+    }
+  }

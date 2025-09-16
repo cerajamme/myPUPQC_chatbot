@@ -184,3 +184,17 @@ class Feedback(Base):
     
     def __repr__(self):
         return f"<Feedback(conversation_id={self.conversation_id}, rating={self.rating})>"
+    
+class ChatOption(Base):
+    """Dynamic chat options/quick questions for users"""
+    __tablename__ = "chat_options"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    label = Column(String(255), nullable=False)  # "What are the requirements for Latin honors?"
+    order = Column(Integer, default=0)  # For sorting options
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    
+    def __repr__(self):
+        return f"<ChatOption(label='{self.label[:50]}...', active={self.is_active})>"

@@ -43,6 +43,15 @@ const Dashboard = ({ user, onLogout }) => {
 
   const tabs = [
     { 
+      id: 'chat', 
+      label: 'Test Chat',
+      icon: (
+        <svg className="navbar-nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+        </svg>
+      )
+    },
+    { 
       id: 'upload', 
       label: 'Upload Documents',
       icon: (
@@ -57,15 +66,6 @@ const Dashboard = ({ user, onLogout }) => {
       icon: (
         <svg className="navbar-nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-        </svg>
-      )
-    },
-    { 
-      id: 'chat', 
-      label: 'Test Chat',
-      icon: (
-        <svg className="navbar-nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
         </svg>
       )
     },
@@ -205,12 +205,12 @@ const Dashboard = ({ user, onLogout }) => {
       </nav>
 
       {/* User Info Header */}
-      <div className="dashboard-user-info">
+      {/* <div className="dashboard-user-info">
         <div className="user-details">
           <h2>Student Chatbot Dashboard</h2>
           <p>Manage your chatbot and documents</p>
         </div>
-      </div>
+      </div> */}
 
       {/* Content */}
       <div className="dashboard-content">

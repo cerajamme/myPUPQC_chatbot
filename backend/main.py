@@ -2,6 +2,7 @@ import os
 import uuid
 import logging
 import asyncio
+import re
 from datetime import datetime
 from typing import List, Optional, Dict, Any
 from fastapi import FastAPI, HTTPException, Depends, UploadFile, File, Form, BackgroundTasks
@@ -14,7 +15,7 @@ from pydantic import BaseModel
 from config import settings, validate_settings, get_upload_path, is_file_allowed, is_file_size_valid
 from database import get_db, create_tables, create_initial_data, health_check, get_chatbot_by_type
 from auth import login_admin, get_current_active_user, require_admin
-from models import User, Chatbot, Document as DocModel, Conversation, ChatbotType
+from models import User, Chatbot, Document as DocModel, Conversation, ChatbotType, ChatOption
 
 # Setup logging
 logging.basicConfig(level=getattr(logging, settings.log_level))
@@ -118,6 +119,56 @@ class HealthResponse(BaseModel):
     database: bool
     rag_system: Dict[str, Any]
     timestamp: str
+
+# Pydantic models for chat options
+class ChatOptionCreate(BaseModel):
+    label: str
+    order: Optional[int] = 0
+
+class ChatOptionResponse(BaseModel):
+    id: int
+    label: str
+    order: int
+    is_active: bool
+    created_at: str
+
+# Helper function to clean bot responses
+def clean_bot_response(response_text: str) -> str:
+    """Clean bot response to remove PDF references and make it natural"""
+    cleaned = response_text
+    
+    # Remove PDF references
+    patterns_to_remove = [
+        r'Based on the provided text from[^,]*,?\s*',
+        r'Page \d+\s*-?\s*',
+        r'\.pdf\b',
+        r'according to the document\s*',
+        r'from the document\s*',
+        r'the document states\s*',
+        r'as mentioned in the text\s*',
+        r'the text indicates\s*',
+        r'from the provided information\s*',
+        r'based on the information provided\s*'
+    ]
+    
+    for pattern in patterns_to_remove:
+        cleaned = re.sub(pattern, '', cleaned, flags=re.IGNORECASE)
+    
+    # Replace document-specific language with natural language
+    replacements = {
+        'The document details': 'The information covers',
+        'The document mentions': 'The information indicates',
+        'According to the text': 'The information shows',
+        'The provided text states': 'The information indicates'
+    }
+    
+    for old, new in replacements.items():
+        cleaned = re.sub(old, new, cleaned, flags=re.IGNORECASE)
+    
+    # Clean up extra whitespace
+    cleaned = re.sub(r'\s+', ' ', cleaned).strip()
+    
+    return cleaned
 
 # Startup event - minimal and resilient
 @app.on_event("startup")
@@ -347,12 +398,21 @@ async def test_student_chat(
     request: ChatRequest,
     current_user: User = Depends(require_admin)
 ):
-    """Test student chatbot with admin query"""
+    """Test student chatbot with admin query - cleaned responses"""
     rag = get_rag_system()
     session_id = f"admin_test_{uuid.uuid4()}"
     
     result = await rag.query_student_bot(request.message, session_id)
-    return ChatResponse(**result)
+    
+    # Clean the response to remove PDF references
+    cleaned_answer = clean_bot_response(result.get("answer", ""))
+    
+    return ChatResponse(
+        answer=cleaned_answer,
+        sources=[],  # Don't show sources in natural conversation
+        response_time_ms=0,  # Don't show response time
+        session_id=session_id
+    )
 
 # Public chat endpoint for embeddable widgets
 @app.post("/chat/student", response_model=ChatResponse)
@@ -367,8 +427,16 @@ async def chat_with_student_bot(request: ChatRequest):
         # Get response from RAG system
         result = await rag.query_student_bot(request.message, session_id)
         
+        # Clean the response to remove PDF references
+        cleaned_answer = clean_bot_response(result.get("answer", ""))
+        
         logger.info(f"Student query answered: {request.message[:50]}...")
-        return ChatResponse(**result)
+        return ChatResponse(
+            answer=cleaned_answer,
+            sources=[],  # Don't show sources in natural conversation
+            response_time_ms=0,  # Don't show response time
+            session_id=session_id
+        )
         
     except Exception as e:
         logger.error(f"Chat error: {e}")
@@ -378,6 +446,84 @@ async def chat_with_student_bot(request: ChatRequest):
             response_time_ms=0,
             session_id=request.session_id
         )
+
+# Chat options endpoints
+@app.get("/api/chat-options", response_model=List[ChatOptionResponse])
+async def get_chat_options(db: Session = Depends(get_db)):
+    """Get active chat options for frontend"""
+    try:
+        options = db.query(ChatOption).filter(
+            ChatOption.is_active == True
+        ).order_by(ChatOption.order.asc(), ChatOption.created_at.asc()).all()
+        
+        return [
+            ChatOptionResponse(
+                id=option.id,
+                label=option.label,
+                order=option.order,
+                is_active=option.is_active,
+                created_at=option.created_at.isoformat()
+            )
+            for option in options
+        ]
+    except Exception as e:
+        logger.error(f"Error fetching chat options: {e}")
+        return []
+
+@app.post("/api/admin/chat-options", response_model=ChatOptionResponse)
+async def create_chat_option(
+    option_data: ChatOptionCreate,
+    current_user: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """Create new chat option"""
+    try:
+        new_option = ChatOption(
+            label=option_data.label.strip(),
+            order=option_data.order,
+            is_active=True
+        )
+        
+        db.add(new_option)
+        db.commit()
+        db.refresh(new_option)
+        
+        logger.info(f"Created chat option: {new_option.label}")
+        
+        return ChatOptionResponse(
+            id=new_option.id,
+            label=new_option.label,
+            order=new_option.order,
+            is_active=new_option.is_active,
+            created_at=new_option.created_at.isoformat()
+        )
+    except Exception as e:
+        logger.error(f"Error creating chat option: {e}")
+        raise HTTPException(status_code=500, detail="Failed to create chat option")
+
+@app.delete("/api/admin/chat-options/{option_id}")
+async def delete_chat_option(
+    option_id: int,
+    current_user: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """Delete chat option"""
+    try:
+        option = db.query(ChatOption).filter(ChatOption.id == option_id).first()
+        if not option:
+            raise HTTPException(status_code=404, detail="Chat option not found")
+        
+        db.delete(option)
+        db.commit()
+        
+        logger.info(f"Deleted chat option: {option.label}")
+        return {"message": "Chat option deleted successfully"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting chat option: {e}")
+        raise HTTPException(status_code=500, detail="Failed to delete chat option")
 
 # Widget JavaScript endpoint - Fixed to use proper backend URL
 @app.get("/widget/student.js", response_class=PlainTextResponse)
@@ -541,7 +687,7 @@ async def get_student_widget():
     }}
     
     // Add message to chat
-    function addMessage(message, isUser = false, sources = null) {{
+    function addMessage(message, isUser = false) {{
         const messageDiv = document.createElement('div');
         messageDiv.style.cssText = `
             margin-bottom: 12px;
@@ -563,24 +709,6 @@ async def get_student_widget():
         `;
         
         messageContent.textContent = message;
-        
-        // Add sources if available
-        if (!isUser && sources && sources.length > 0) {{
-            const sourcesDiv = document.createElement('div');
-            sourcesDiv.style.cssText = `
-                margin-top: 8px;
-                padding-top: 8px;
-                border-top: 1px solid #e5e7eb;
-                font-size: 11px;
-                color: #6b7280;
-            `;
-            
-            sourcesDiv.innerHTML = '<strong>Sources:</strong> ' + 
-                sources.map(s => `${{s.filename}} (p. ${{s.page}})`).join(', ');
-            
-            messageContent.appendChild(sourcesDiv);
-        }}
-        
         messageDiv.appendChild(messageContent);
         chatMessages.appendChild(messageDiv);
         chatMessages.scrollTop = chatMessages.scrollHeight;
@@ -671,7 +799,7 @@ async def get_student_widget():
             hideTyping();
             
             if (response.ok) {{
-                addMessage(data.answer, false, data.sources);
+                addMessage(data.answer, false);
             }} else {{
                 addMessage('Sorry, I encountered an error. Please try again.', false);
             }}
@@ -719,6 +847,7 @@ async def get_student_widget():
 """
     return widget_js
 
+
 # Analytics endpoints
 @app.get("/admin/student/analytics")
 async def get_student_analytics(
@@ -758,6 +887,7 @@ async def get_student_analytics(
             "total_conversations": 0,
             "recent_conversations": []
         }
+    
 
 if __name__ == "__main__":
     import uvicorn

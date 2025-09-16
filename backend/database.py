@@ -1,5 +1,5 @@
 from sqlalchemy import create_engine, text
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker, Session
 import logging
 import time
 
@@ -56,11 +56,29 @@ def create_initial_data():
     """Create initial data - already done in main setup"""
     return True
 
+def create_initial_chat_options(db: Session):
+    """Create default chat options"""
+    from models import ChatOption
+    
+    default_options = [
+        "What are the requirements for Latin honors?",
+        "How do I enroll for the next semester?", 
+        "What financial aid options are available?"
+    ]
+    
+    for i, label in enumerate(default_options):
+        existing = db.query(ChatOption).filter(ChatOption.label == label).first()
+        if not existing:
+            option = ChatOption(label=label, order=i, is_active=True)
+            db.add(option)
+    
+    db.commit()
+
 if __name__ == "__main__":
     print("Setting up database...")
     
     # Import models (this registers them)
-    from models import Base, User, Chatbot, ChatbotType
+    from models import Base, User, Chatbot, ChatbotType, ChatOption
     from passlib.context import CryptContext
     
     # Create all tables
@@ -72,30 +90,38 @@ if __name__ == "__main__":
     pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
     db = SessionLocal()
     
-    admin = User(
-        email="admin@example.com",
-        hashed_password=pwd_context.hash("admin123"),
-        full_name="Admin User",
-        is_superuser=True,
-        is_active=True
-    )
-    db.add(admin)
-    
-    import uuid
-    student_bot = Chatbot(
-        name="Student Support Bot",
-        type=ChatbotType.STUDENT,
-        description="Student support chatbot",
-        embed_code=str(uuid.uuid4()),
-        widget_title="Student Support",
-        widget_color="#3B82F6",
-        welcome_message="Hi! How can I help?",
-        is_active=True
-    )
-    db.add(student_bot)
-    
-    db.commit()
-    db.close()
-    
-    print("Setup complete!")
-    print("Login: admin@example.com / admin123")
+    try:
+        admin = User(
+            email="admin@example.com",
+            hashed_password=pwd_context.hash("admin123"),
+            full_name="Admin User",
+            is_superuser=True,
+            is_active=True
+        )
+        db.add(admin)
+        
+        import uuid
+        student_bot = Chatbot(
+            name="Student Support Bot",
+            type=ChatbotType.STUDENT,
+            description="Student support chatbot",
+            embed_code=str(uuid.uuid4()),
+            widget_title="Student Support",
+            widget_color="#3B82F6",
+            welcome_message="Hi! How can I help?",
+            is_active=True
+        )
+        db.add(student_bot)
+        
+        # Create initial chat options
+        create_initial_chat_options(db)
+        
+        db.commit()
+        print("Setup complete!")
+        print("Login: admin@example.com / admin123")
+        
+    except Exception as e:
+        print(f"Error during setup: {e}")
+        db.rollback()
+    finally:
+        db.close()

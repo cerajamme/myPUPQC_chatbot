@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { admin } from '../api';
+import './AnalyticsStyles.css'; 
 
 const Analytics = () => {
   const [analytics, setAnalytics] = useState(null);
@@ -61,127 +62,87 @@ const Analytics = () => {
   }
 
   return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-        <h2 style={{ fontSize: '20px', fontWeight: '600', color: '#1f2937' }}>
-          Student Chatbot Analytics
-        </h2>
-        <button 
-          onClick={fetchAnalytics} 
-          className="btn btn-primary"
-          style={{ padding: '8px 16px', fontSize: '14px' }}
-        >
-          Refresh
-        </button>
-      </div>
-
-      {/* Summary Stats */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '24px' }}>
-        <div className="card" style={{ textAlign: 'center' }}>
-          <h3 style={{ fontSize: '24px', fontWeight: 'bold', color: '#3b82f6', margin: '0 0 8px 0' }}>
-            {analytics?.total_conversations || 0}
-          </h3>
-          <p style={{ color: '#6b7280', fontSize: '14px', margin: 0 }}>Total Conversations</p>
+    <div className="analytics-wrapper">
+      <div className="analytics-container">
+        {/* Header */}
+        <div className="analytics-header">
+          <h2 className="analytics-title">
+            <svg className="analytics-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
+            </svg>
+            Student Chatbot Analytics
+          </h2>
+          <button onClick={fetchAnalytics} className="refresh-button">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0V9a8 8 0 1115.357 2m-15.357-2H9" />
+            </svg>
+            Refresh
+          </button>
         </div>
-
-        <div className="card" style={{ textAlign: 'center' }}>
-          <h3 style={{ fontSize: '24px', fontWeight: 'bold', color: '#059669', margin: '0 0 8px 0' }}>
-            {analytics?.recent_conversations?.length || 0}
-          </h3>
-          <p style={{ color: '#6b7280', fontSize: '14px', margin: 0 }}>Recent Sessions</p>
-        </div>
-
-        <div className="card" style={{ textAlign: 'center' }}>
-          <h3 style={{ fontSize: '24px', fontWeight: 'bold', color: '#dc2626', margin: '0 0 8px 0' }}>
-            {analytics?.recent_conversations?.length > 0 
-              ? Math.round(analytics.recent_conversations.reduce((sum, conv) => sum + (conv.response_time_ms || 0), 0) / analytics.recent_conversations.length)
-              : 0}ms
-          </h3>
-          <p style={{ color: '#6b7280', fontSize: '14px', margin: 0 }}>Avg Response Time</p>
-        </div>
-      </div>
-
-      {/* Recent Conversations */}
-      <div className="card">
-        <h3 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '16px', color: '#1f2937' }}>
-          Recent Conversations
-        </h3>
-
-        {!analytics?.recent_conversations || analytics.recent_conversations.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '40px', backgroundColor: '#f9fafb', borderRadius: '8px' }}>
-            <p style={{ color: '#6b7280', fontSize: '16px' }}>No conversations yet</p>
-            <p style={{ color: '#9ca3af', fontSize: '14px', marginTop: '8px' }}>
-              Start testing your chatbot to see analytics here
-            </p>
+  
+        {/* Stats Grid */}
+        <div className="stats-grid">
+          <div className="stat-card">
+            <div className="stat-value primary">{analytics?.total_conversations || 0}</div>
+            <div className="stat-label">Total Conversations</div>
           </div>
-        ) : (
-          <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
-            {analytics.recent_conversations.map((conversation, index) => (
-              <div key={index} style={{
-                padding: '16px',
-                border: '1px solid #e5e7eb',
-                borderRadius: '8px',
-                marginBottom: '12px',
-                backgroundColor: '#fafafa'
-              }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
-                  <p style={{ fontWeight: '500', color: '#1f2937', margin: 0, flex: 1 }}>
-                    {conversation.question}
-                  </p>
-                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                    {conversation.response_time_ms && (
-                      <span style={{
-                        fontSize: '12px',
-                        backgroundColor: '#f0f9ff',
-                        color: '#0369a1',
-                        padding: '2px 6px',
-                        borderRadius: '4px'
-                      }}>
-                        {conversation.response_time_ms}ms
-                      </span>
-                    )}
-                    <span style={{ fontSize: '12px', color: '#6b7280' }}>
-                      {formatDate(conversation.created_at)}
-                    </span>
+          <div className="stat-card">
+            <div className="stat-value success">{analytics?.recent_conversations?.length || 0}</div>
+            <div className="stat-label">Recent Sessions</div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-value warning">
+              {analytics?.recent_conversations?.length > 0 
+                ? Math.round(analytics.recent_conversations.reduce((sum, conv) => sum + (conv.response_time_ms || 0), 0) / analytics.recent_conversations.length)
+                : 0}ms
+            </div>
+            <div className="stat-label">Avg Response Time</div>
+          </div>
+        </div>
+        
+        {/* Recent Conversations */}
+        <div className="content-card">
+          <h3 className="content-card-title">
+            <svg className="content-card-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+            </svg>
+            Recent Conversations
+          </h3>
+  
+          {!analytics?.recent_conversations || analytics.recent_conversations.length === 0 ? (
+            <div className="empty-state">
+              <svg className="empty-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+              </svg>
+              <h3 className="empty-title">No conversations yet</h3>
+              <p className="empty-description">
+                Start testing your chatbot to see analytics here
+              </p>
+            </div>
+          ) : (
+            <div className="conversations-list">
+              {analytics.recent_conversations.map((conversation, index) => (
+                <div key={index} className="conversation-item">
+                  <div className="conversation-header">
+                    <p className="conversation-question">{conversation.question}</p>
+                    <div className="conversation-meta">
+                      {conversation.response_time_ms && (
+                        <span className="response-time-badge">{conversation.response_time_ms}ms</span>
+                      )}
+                      <span className="conversation-timestamp">{formatDate(conversation.created_at)}</span>
+                    </div>
                   </div>
+                  <p className="conversation-preview">
+                    {conversation.question.length > 100 
+                      ? `${conversation.question.substring(0, 100)}...` 
+                      : conversation.question
+                    }
+                  </p>
                 </div>
-                
-                <p style={{ 
-                  fontSize: '14px', 
-                  color: '#6b7280', 
-                  margin: 0,
-                  lineHeight: '1.4'
-                }}>
-                  {conversation.question.length > 100 
-                    ? `${conversation.question.substring(0, 100)}...` 
-                    : conversation.question
-                  }
-                </p>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Usage Tips */}
-      <div className="card" style={{ backgroundColor: '#f0f9ff', border: '1px solid #bae6fd' }}>
-        <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '12px', color: '#0369a1' }}>
-          Analytics Tips
-        </h3>
-        <ul style={{ margin: 0, paddingLeft: '20px', color: '#0c4a6e' }}>
-          <li style={{ marginBottom: '8px', fontSize: '14px' }}>
-            Upload more documents to improve response quality and coverage
-          </li>
-          <li style={{ marginBottom: '8px', fontSize: '14px' }}>
-            Monitor response times - consistently slow responses may indicate server issues
-          </li>
-          <li style={{ marginBottom: '8px', fontSize: '14px' }}>
-            Review common questions to identify knowledge gaps in your documents
-          </li>
-          <li style={{ fontSize: '14px' }}>
-            Test different question phrasings to ensure your chatbot handles various user inputs
-          </li>
-        </ul>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
