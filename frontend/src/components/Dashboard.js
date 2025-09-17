@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
+import TestChat from './TestChat';
 import FileUpload from './FileUpload';
 import DocumentList from './DocumentList';
-import TestChat from './TestChat';
 import Analytics from './Analytics';
 import './DashboardStyles.css';
 
@@ -175,8 +175,7 @@ const Dashboard = ({ user, onLogout }) => {
                     </div>
                   </div>
                   <hr style={{ margin: '0.25rem 0', border: 'none', borderTop: '1px solid #e5e7eb' }} />
-                  <button className="profile-dropdown-item">Your Profile</button>
-                  <button className="profile-dropdown-item">Settings</button>
+                  {/* <button className="profile-dropdown-item">Your Profile</button> */}
                   <button 
                     className="profile-dropdown-item"
                     onClick={onLogout}
@@ -214,9 +213,9 @@ const Dashboard = ({ user, onLogout }) => {
 
       {/* Content */}
       <div className="dashboard-content">
+        {activeTab === 'chat' && <TestChat />}
         {activeTab === 'upload' && <FileUpload />}
         {activeTab === 'documents' && <DocumentList />}
-        {activeTab === 'chat' && <TestChat />}
         {activeTab === 'analytics' && <Analytics />}
       </div>
     </div>

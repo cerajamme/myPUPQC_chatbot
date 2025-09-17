@@ -64,8 +64,13 @@ const Login = ({ onLogin }) => {
       <div className="login-form-wrapper">
         <div className="login-glass-card">
           <div className="login-logo-section">
-            <div className="login-logo">PC</div>
-            <h1 className="login-title">Welcome Back</h1>
+            <div className="login-logo">
+              <img src="/mypupqc-chatbot.png" alt="PC Logo" className="logo-img" />
+            </div>
+
+
+            <h1 className="login-title">myPUPQC.ai</h1>
+            <h3 className="login-title">Chatbot System</h3>
             <div className="login-badge">Admin Portal</div>
           </div>
 
@@ -137,20 +142,12 @@ const Login = ({ onLogin }) => {
               {loading ? (
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <div className="login-spinner"></div>
-                  Signing in...
+                  Logging in...
                 </div>
               ) : (
-                'Sign In'
+                'Log In'
               )}
             </button>
-
-            <div className="login-credentials-box">
-              <p className="login-credentials-text">
-                <strong>Default credentials:</strong>
-                <br />
-                admin@example.com / admin123
-              </p>
-            </div>
           </div>
         </div>
       </div>
