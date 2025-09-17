@@ -1,11 +1,8 @@
 (function() {
     'use strict';
     
-    // Configuration
-// In src/api.js, update the API_BASE_URL
-    const API_BASE_URL = process.env.NODE_ENV === 'production' 
-    ? 'https://mypupqcchatbot-production.up.railway.app/'  // Your live backend
-    : 'http://localhost:8000';
+    // Configuration - FIXED API URL
+    const API_BASE_URL = 'http://127.0.0.1:8000';
     const WIDGET_ID = 'student-chatbot-widget';
     
     // Prevent multiple widget loads
@@ -13,14 +10,14 @@
         return;
     }
     
-    // Generate session ID
-    let sessionId = localStorage.getItem('student_chat_session');
-    if (!sessionId) {
-        sessionId = 'student_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now();
-        localStorage.setItem('student_chat_session', sessionId);
+    // Generate session ID (removed localStorage for Claude.ai compatibility)
+    function generateSessionId() {
+        return 'student_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now();
     }
     
-    // Widget HTML template
+    let sessionId = generateSessionId();
+    
+    // Widget HTML template - PUPQC MAROON BRANDING
     const widgetHTML = `
         <div id="${WIDGET_ID}" style="position: fixed; bottom: 20px; right: 20px; z-index: 9999; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
             <!-- Chat Button -->
@@ -28,11 +25,11 @@
                 width: 60px; 
                 height: 60px; 
                 border-radius: 50%; 
-                background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+                background: linear-gradient(135deg, #7c2d12, #991b1b);
                 color: white; 
                 border: none; 
                 cursor: pointer; 
-                box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+                box-shadow: 0 4px 12px rgba(124, 45, 18, 0.4);
                 display: flex; 
                 align-items: center; 
                 justify-content: center;
@@ -62,11 +59,11 @@
                 <!-- Header -->
                 <div style="
                     padding: 16px;
-                    background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+                    background: linear-gradient(135deg, #7c2d12, #991b1b);
                     color: white;
                     border-radius: 12px 12px 0 0;
                 ">
-                    <h3 style="margin: 0; font-size: 16px; font-weight: 600;">Student Support</h3>
+                    <h3 style="margin: 0; font-size: 16px; font-weight: 600;">PUPQC Student Assistant</h3>
                     <p style="margin: 4px 0 0 0; font-size: 12px; opacity: 0.9;">Ask me about academic information</p>
                 </div>
                 
@@ -86,7 +83,7 @@
                         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
                     ">
                         <p style="margin: 0; font-size: 14px; color: #374151;">
-                            Hi! I'm here to help with your academic questions. Ask me about courses, policies, deadlines, and more!
+                            Hello! I'm your PUPQC Student Assistant. I can help you with academic questions, course information, policies, deadlines, and more. How can I assist you today?
                         </p>
                     </div>
                 </div>
@@ -98,7 +95,7 @@
                     background: white;
                 ">
                     <div style="display: flex; gap: 8px;">
-                        <input type="text" id="chat-input" placeholder="Ask a question..." style="
+                        <input type="text" id="chat-input" placeholder="Ask me anything about PUPQC..." style="
                             flex: 1;
                             padding: 10px 12px;
                             border: 1px solid #d1d5db;
@@ -108,7 +105,7 @@
                         ">
                         <button id="chat-send" style="
                             padding: 10px 16px;
-                            background: #3b82f6;
+                            background: #7c2d12;
                             color: white;
                             border: none;
                             border-radius: 20px;
@@ -135,6 +132,117 @@
     const closeIcon = document.getElementById('close-icon');
     
     let isOpen = false;
+    let optionsLoaded = false;
+    
+    // Fetch and display quick options
+    async function loadQuickOptions() {
+        if (optionsLoaded) return; // Only load once
+        
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/chat-options`);
+            const options = await response.json();
+            
+            if (options && options.length > 0) {
+                displayQuickOptions(options.filter(opt => opt.is_active !== false));
+            }
+            optionsLoaded = true;
+        } catch (error) {
+            console.log('Could not load quick options:', error);
+            optionsLoaded = true; // Don't try again
+        }
+    }
+    
+    function displayQuickOptions(options) {
+        const optionsContainer = document.createElement('div');
+        optionsContainer.id = 'quick-options';
+        optionsContainer.style.cssText = `
+            margin: 12px 0;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        `;
+        
+        // Add a small header
+        const optionsHeader = document.createElement('div');
+        optionsHeader.style.cssText = `
+            font-size: 12px;
+            color: #6b7280;
+            margin-bottom: 4px;
+            font-weight: 500;
+        `;
+        // optionsHeader.textContent = 'Quick qu';
+        optionsContainer.appendChild(optionsHeader);
+        
+        options.forEach(option => {
+            const button = document.createElement('button');
+            button.textContent = option.label;
+            button.style.cssText = `
+                padding: 10px 12px;
+                background: #f3f4f6;
+                border: 1px solid #d1d5db;
+                border-radius: 8px;
+                font-size: 13px;
+                cursor: pointer;
+                text-align: left;
+                transition: all 0.2s;
+                color: #374151;
+                line-height: 1.3;
+            `;
+            
+            button.onmouseover = () => {
+                button.style.background = '#e5e7eb';
+                button.style.borderColor = '#9ca3af';
+            };
+            
+            button.onmouseout = () => {
+                button.style.background = '#f3f4f6';
+                button.style.borderColor = '#d1d5db';
+            };
+            
+            button.onclick = () => {
+                // Auto-send the option
+                addMessage(option.label, true);
+                hideQuickOptions(); // Hide options after selection
+                showTyping();
+                
+                // Send to backend
+                fetch(`${API_BASE_URL}/chat/student`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        message: option.label,
+                        session_id: sessionId
+                    })
+                }).then(response => response.json())
+                .then(data => {
+                    hideTyping();
+                    if (data.answer) {
+                        addMessage(data.answer, false);
+                    }
+                }).catch(error => {
+                    hideTyping();
+                    addMessage('Sorry, I encountered an error. Please try again.', false);
+                });
+            };
+            
+            optionsContainer.appendChild(button);
+        });
+        
+        // Insert after welcome message
+        const welcomeMsg = chatMessages.querySelector('div');
+        if (welcomeMsg) {
+            welcomeMsg.insertAdjacentElement('afterend', optionsContainer);
+        }
+    }
+    
+    function hideQuickOptions() {
+        const optionsContainer = document.getElementById('quick-options');
+        if (optionsContainer) {
+            optionsContainer.style.display = 'none';
+        }
+    }
     
     // Toggle chat window
     function toggleChat() {
@@ -144,6 +252,9 @@
             chatIcon.style.display = 'none';
             closeIcon.style.display = 'block';
             chatInput.focus();
+            
+            // Load options when opening for the first time
+            loadQuickOptions();
         } else {
             chatWindow.style.display = 'none';
             chatIcon.style.display = 'block';
@@ -151,8 +262,8 @@
         }
     }
     
-    // Add message to chat
-    function addMessage(message, isUser = false, sources = null) {
+    // Add message to chat - REMOVED SOURCES
+    function addMessage(message, isUser = false) {
         const messageDiv = document.createElement('div');
         messageDiv.style.cssText = `
             margin-bottom: 12px;
@@ -165,7 +276,7 @@
             max-width: 80%;
             padding: 10px 12px;
             border-radius: 12px;
-            background: ${isUser ? '#3b82f6' : 'white'};
+            background: ${isUser ? '#7c2d12' : 'white'};
             color: ${isUser ? 'white' : '#374151'};
             font-size: 14px;
             line-height: 1.4;
@@ -173,24 +284,6 @@
         `;
         
         messageContent.textContent = message;
-        
-        // Add sources if available
-        if (!isUser && sources && sources.length > 0) {
-            const sourcesDiv = document.createElement('div');
-            sourcesDiv.style.cssText = `
-                margin-top: 8px;
-                padding-top: 8px;
-                border-top: 1px solid #e5e7eb;
-                font-size: 11px;
-                color: #6b7280;
-            `;
-            
-            sourcesDiv.innerHTML = '<strong>Sources:</strong> ' + 
-                sources.map(s => `${s.filename} (p. ${s.page})`).join(', ');
-            
-            messageContent.appendChild(sourcesDiv);
-        }
-        
         messageDiv.appendChild(messageContent);
         chatMessages.appendChild(messageDiv);
         chatMessages.scrollTop = chatMessages.scrollHeight;
@@ -257,6 +350,9 @@
         const message = chatInput.value.trim();
         if (!message) return;
         
+        // Hide quick options after first manual message
+        hideQuickOptions();
+        
         // Add user message
         addMessage(message, true);
         chatInput.value = '';
@@ -281,12 +377,15 @@
             hideTyping();
             
             if (response.ok) {
-                addMessage(data.answer, false, data.sources);
+                // Only show the answer, no sources
+                addMessage(data.answer, false);
             } else {
+                console.log('API Error:', data);
                 addMessage('Sorry, I encountered an error. Please try again.', false);
             }
             
         } catch (error) {
+            console.log('Widget connection error:', error);
             hideTyping();
             addMessage('Sorry, I\'m having trouble connecting. Please try again later.', false);
         }
@@ -301,7 +400,7 @@
         }
     });
     
-    // Add CSS animations
+    // Add CSS animations - MAROON COLORS
     const style = document.createElement('style');
     style.textContent = `
         @keyframes typing {
@@ -311,16 +410,31 @@
         
         #chat-toggle:hover {
             transform: scale(1.05);
-            box-shadow: 0 6px 16px rgba(59, 130, 246, 0.5);
+            box-shadow: 0 6px 16px rgba(124, 45, 18, 0.5);
         }
         
         #chat-input:focus {
-            border-color: #3b82f6;
-            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+            border-color: #7c2d12;
+            box-shadow: 0 0 0 3px rgba(124, 45, 18, 0.1);
         }
         
         #chat-send:hover {
-            background: #2563eb;
+            background: #991b1b;
+        }
+        
+        /* Mobile responsiveness */
+        @media (max-width: 480px) {
+            #${WIDGET_ID} {
+                bottom: 10px;
+                right: 10px;
+            }
+            
+            #chat-window {
+                width: calc(100vw - 40px);
+                height: calc(100vh - 140px);
+                right: -10px;
+                bottom: 80px;
+            }
         }
     `;
     document.head.appendChild(style);

@@ -244,6 +244,7 @@
     border-radius: 0.5rem;
     padding: 1rem;
     transition: all 0.2s ease;
+    text-align: left;
   }
   
   .conversation-item:hover {
@@ -266,6 +267,8 @@
     margin: 0;
     line-height: 1.4;
     flex: 1;
+    text-align: start;
+    text-align: left;
   }
   
   .conversation-meta {
@@ -296,6 +299,8 @@
     font-size: 0.8125rem;
     margin: 0;
     line-height: 1.4;
+    text-align: left;
+    text-align: start;
   }
   
   /* Tips Card */

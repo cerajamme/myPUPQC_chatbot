@@ -14,6 +14,8 @@ const TestChat = () => {
   const [addingOption, setAddingOption] = useState(false);
   const [deletingOption, setDeletingOption] = useState(null);
   const messagesEndRef = useRef(null);
+  const [showEmbedCode, setShowEmbedCode] = useState(false);
+  const [embedCodeCopied, setEmbedCodeCopied] = useState(false);
 
   // Static fallback options
   const fallbackOptions = [
@@ -133,12 +135,6 @@ const TestChat = () => {
     });
   };
 
-
-  //   // Keep this function for sample buttons
-  // const setSampleQuestion = (question) => {
-  //   setMessage(question);
-  // };
-
   // Create a separate function for auto-send options
   const handleOptionClick = async (optionLabel) => {
     // Don't call setSampleQuestion - go straight to sending
@@ -205,6 +201,25 @@ const TestChat = () => {
     }
   };
 
+  // Copy embed code function
+  const copyEmbedCode = () => {
+    const embedCode = `<script src="https://mypupqcchatbot-production.up.railway.app/widget/student.js" async></script>`;
+    navigator.clipboard.writeText(embedCode).then(() => {
+      setEmbedCodeCopied(true);
+      setTimeout(() => setEmbedCodeCopied(false), 2000);
+    }).catch(() => {
+      // Fallback for older browsers
+      const textarea = document.createElement('textarea');
+      textarea.value = embedCode;
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textarea);
+      setEmbedCodeCopied(true);
+      setTimeout(() => setEmbedCodeCopied(false), 2000);
+    });
+  };
+
   return (
     <div className="test-chat-wrapper">
       <div className="test-chat-container">
@@ -261,35 +276,7 @@ const TestChat = () => {
               </div>
             </div>
 
-            {/* Input Section */}
-            <div className="chat-input-section">
-              <div className="input-container">
-                <textarea
-                  value={message}
-                  onChange={(e) => setMessage(e.target.value)}
-                  onKeyPress={handleKeyPress}
-                  placeholder="Ask me anything about PUPQC student services..."
-                  className="message-textarea"
-                  disabled={loading}
-                  rows={1}
-                />
-                <button
-                  onClick={handleSendMessage}
-                  disabled={!message.trim() || loading}
-                  className="send-button"
-                >
-                  <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                  </svg>
-                  Send
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Right Side - Options & Admin */}
-          <div className="admin-section">
-            {/* Quick Options */}
+            {/* Quick Options - Above Input */}
             <div className="sample-questions">
               <p className="sample-title">
                 <svg className="sample-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -321,6 +308,34 @@ const TestChat = () => {
               )}
             </div>
 
+            {/* Input Section */}
+            <div className="chat-input-section">
+              <div className="input-container">
+                <textarea
+                  value={message}
+                  onChange={(e) => setMessage(e.target.value)}
+                  onKeyPress={handleKeyPress}
+                  placeholder="Ask me anything about PUPQC student services..."
+                  className="message-textarea"
+                  disabled={loading}
+                  rows={1}
+                />
+                <button
+                  onClick={handleSendMessage}
+                  disabled={!message.trim() || loading}
+                  className="send-button"
+                >
+                  <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                  </svg>
+                  Send
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Right Side - Admin */}
+          <div className="admin-section">
             {/* Admin Options Management */}
             <div className="admin-options-section">
               <div className="admin-header">
@@ -364,7 +379,7 @@ const TestChat = () => {
                         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
                         </svg>
-                        Add
+                        Add Option
                       </>
                     )}
                   </button>
@@ -396,6 +411,56 @@ const TestChat = () => {
                   ))}
                 </div>
               </div>
+            </div>
+
+            {/* Embed Code Section */}
+            <div className="embed-code-section">
+              <div className="embed-header">
+                <h3 className="embed-title">
+                  <svg className="embed-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+                  </svg>
+                  Share Your Chatbot
+                </h3>
+                <button 
+                  onClick={() => setShowEmbedCode(!showEmbedCode)}
+                  className="toggle-embed-button"
+                >
+                  {showEmbedCode ? 'Hide' : 'Show'} Embed Code
+                </button>
+              </div>
+              
+              {showEmbedCode && (
+                <div className="embed-content">
+                  <p className="embed-description">
+                    Copy this code and paste it into any website to add your PUPQC Student Assistant chatbot:
+                  </p>
+                  
+                  <div className="embed-code-container">
+                    <code className="embed-code">
+                      &lt;script src="https://mypupqcchatbot-production.up.railway.app/widget/student.js" async&gt;&lt;/script&gt;
+                    </code>
+                  </div>
+                  
+                  <button onClick={copyEmbedCode} className="copy-embed-button">
+                    {embedCodeCopied ? (
+                      <>
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                        Copied!
+                      </>
+                    ) : (
+                      <>
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                        </svg>
+                        Copy Code
+                      </>
+                    )}
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>

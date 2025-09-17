@@ -56,7 +56,7 @@ class Settings(BaseSettings):
     debug: bool = os.getenv("DEBUG", "true").lower() == "true"
     log_level: str = os.getenv("LOG_LEVEL", "INFO")
     
-    # CORS Settings - Fixed implementation
+    # CORS Settings - FIXED to properly parse comma-separated domains
     @property
     def allowed_origins(self) -> List[str]:
         """Generate allowed origins dynamically, filtering out empty values"""
@@ -69,9 +69,16 @@ class Settings(BaseSettings):
         if self.frontend_url:
             origins.append(self.frontend_url)
         
-        # Add widget domain with https if set
+        # Parse widget domain as comma-separated list
         if self.widget_domain:
-            origins.append(f"https://{self.widget_domain}")
+            for domain in self.widget_domain.split(','):
+                domain = domain.strip()
+                if domain == '*':
+                    origins.append('*')
+                elif domain and not domain.startswith('http'):
+                    origins.extend([f"http://{domain}", f"https://{domain}"])
+                elif domain:
+                    origins.append(domain)
         
         # Remove duplicates and empty strings
         return list(filter(None, set(origins)))
