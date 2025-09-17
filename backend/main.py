@@ -531,9 +531,7 @@ async def delete_chat_option(
 
 @app.get("/widget/student.js")
 async def serve_widget():
-    """Serve the widget JavaScript file"""
-    widget_path = Path(__file__).parent.parent / "frontend" / "public" / "widget.js"
-    return FileResponse(widget_path, media_type="application/javascript")
+    return FileResponse("widget.js", media_type="application/javascript")
 
 # Analytics endpoints
 @app.get("/admin/student/analytics")
