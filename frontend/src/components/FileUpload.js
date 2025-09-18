@@ -57,7 +57,20 @@ const FileUpload = () => {
     }
   };
 
-  const handleUpload = async () => {
+  const handleDropzoneClick = (e) => {
+    // Only open file dialog if clicking directly on dropzone, not child elements
+    if (e.target === e.currentTarget && !uploading) {
+      fileInputRef.current?.click();
+    }
+  };
+
+  const handleUpload = async (e) => {
+    // Prevent event bubbling
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+
     if (!file) {
       setMessage('Please select a file first.');
       setMessageType('error');
@@ -83,7 +96,11 @@ const FileUpload = () => {
     }
   };
 
-  const removeFile = () => {
+  const removeFile = (e) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
     setFile(null);
     setMessage('');
     if (fileInputRef.current) {
@@ -113,7 +130,7 @@ const FileUpload = () => {
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
-          onClick={() => !uploading && fileInputRef.current?.click()}
+          onClick={handleDropzoneClick}
         >
           <input
             ref={fileInputRef}
@@ -128,15 +145,17 @@ const FileUpload = () => {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 16.5V9.75m0 0l3 3m-3-3l-3 3M6.75 19.5a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.233-2.33 3 3 0 013.758 3.848A3.752 3.752 0 0118 19.5H6.75z" />
           </svg>
           
-          <p className="upload-main-text">
-            {dragOver ? 'Drop your PDF file here' : 'Click to upload or drag and drop'}
-          </p>
-          <p className="upload-sub-text">
-            Select a PDF file from your computer
-          </p>
-          <p className="upload-format-text">
-            PDF files only • Maximum size: 50MB
-          </p>
+          <div className="upload-text-container">
+            <p className="upload-main-text">
+              {dragOver ? 'Drop your PDF file here' : 'Click to upload or drag and drop'}
+            </p>
+            <p className="upload-sub-text">
+              Select a PDF file from your computer
+            </p>
+            <p className="upload-format-text">
+              PDF files only • Maximum size: 50MB
+            </p>
+          </div>
         </div>
 
         {/* Selected File Display */}
@@ -150,12 +169,10 @@ const FileUpload = () => {
               <p className="file-size">{formatFileSize(file.size)} MB</p>
             </div>
             <button 
-              onClick={(e) => {
-                e.stopPropagation();
-                removeFile();
-              }}
+              onClick={removeFile}
               className="remove-file-btn"
               disabled={uploading}
+              type="button"
             >
               <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -178,15 +195,18 @@ const FileUpload = () => {
           </div>
         )}
 
-        {/* Upload Button */}
-        <button
-          onClick={handleUpload}
-          disabled={!file || uploading}
-          className="upload-button"
-        >
-          {uploading && <div className="upload-spinner"></div>}
-          {uploading ? 'Uploading...' : 'Upload Document'}
-        </button>
+        {/* Upload Button - Completely separate from dropzone */}
+        <div className="upload-button-container">
+          <button
+            onClick={handleUpload}
+            disabled={!file || uploading}
+            className="upload-button"
+            type="button"
+          >
+            {uploading && <div className="upload-spinner"></div>}
+            {uploading ? 'Uploading...' : 'Upload Document'}
+          </button>
+        </div>
       </div>
     </div>
   );

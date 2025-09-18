@@ -136,41 +136,26 @@ class ChatOptionResponse(BaseModel):
 
 # Helper function to clean bot responses
 def clean_bot_response(response_text: str) -> str:
-    """Clean bot response to remove PDF references and make it natural"""
+    """Clean bot response for natural conversation"""
     cleaned = response_text
     
-    # Remove PDF references
-    patterns_to_remove = [
-        r'Based on the provided text from[^,]*,?\s*',
-        r'Page \d+\s*-?\s*',
-        r'\.pdf\b',
-        r'according to the document\s*',
-        r'from the document\s*',
-        r'the document states\s*',
-        r'as mentioned in the text\s*',
-        r'the text indicates\s*',
-        r'from the provided information\s*',
-        r'based on the information provided\s*'
-    ]
+    # Remove technical document references
+    cleaned = re.sub(r'pages?\s+\d+(?:,\s*\d+)*(?:,?\s*and\s*\d+)?\s*of\s*[^.]*document[^.]*\.?', '', cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r'Based on.*?from[^,]*,?\s*', '', cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r'\.pdf\b', '', cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r'according to the document\s*', '', cleaned, flags=re.IGNORECASE)
     
-    for pattern in patterns_to_remove:
-        cleaned = re.sub(pattern, '', cleaned, flags=re.IGNORECASE)
+    # Fix broken formatting
+    cleaned = re.sub(r'\*\s*', '• ', cleaned)  # Convert asterisks to bullets
+    cleaned = re.sub(r'\(\s*\)', '', cleaned)  # Remove empty parentheses
+    cleaned = re.sub(r'&\s*\d+', '', cleaned)  # Remove stray references like "& 5"
+    cleaned = re.sub(r'\s+', ' ', cleaned)     # Clean multiple spaces
     
-    # Replace document-specific language with natural language
-    replacements = {
-        'The document details': 'The information covers',
-        'The document mentions': 'The information indicates',
-        'According to the text': 'The information shows',
-        'The provided text states': 'The information indicates'
-    }
+    # Make tone more conversational
+    cleaned = cleaned.replace('I don\'t have specific information about that in my current knowledge base', 
+                            'I don\'t have details about that specific topic right now')
     
-    for old, new in replacements.items():
-        cleaned = re.sub(old, new, cleaned, flags=re.IGNORECASE)
-    
-    # Clean up extra whitespace
-    cleaned = re.sub(r'\s+', ' ', cleaned).strip()
-    
-    return cleaned
+    return cleaned.strip()
 
 # Startup event - minimal and resilient
 @app.on_event("startup")

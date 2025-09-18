@@ -1,5 +1,6 @@
 import os
 import logging
+import re
 from typing import List, Dict, Optional
 from datetime import datetime
 import google.generativeai as genai
@@ -218,7 +219,7 @@ class SimplifiedRAGSystem:
             status_questions = ['how are you', 'how do you do', 'what are you', 'who are you']
             if any(phrase in question_lower for phrase in status_questions):
                 return {
-                    "answer": "I'm your student support assistant! I'm here to help you with academic questions by searching through uploaded documents and providing information about courses, policies, and procedures. What can I help you with today?",
+                    "answer": "I'm your PUPQC student support assistant! I'm still learning and growing to help students better. I can assist you with academic questions using information from official documents. What can I help you with today?",
                     "sources": [],
                     "response_time_ms": 50,
                     "session_id": session_id
@@ -229,7 +230,7 @@ class SimplifiedRAGSystem:
             
             if not relevant_chunks:
                 return {
-                    "answer": "I don't have specific information about that in my current knowledge base. For the most accurate information, please contact the student services office. You can also try rephrasing your question or asking about courses, policies, or academic procedures.",
+                    "answer": "I'm still learning about that topic! For the most current information, you might want to check the PUPQC student portal, visit the registrar's office, or ask your academic advisor. Is there something else about student life or academics I can help with?",
                     "sources": [],
                     "response_time_ms": 0,
                     "session_id": session_id
@@ -238,22 +239,33 @@ class SimplifiedRAGSystem:
             # Create context from relevant chunks
             context = self._build_context(relevant_chunks)
             
-            # Generate response using Gemini
+            # Generate response using Gemini with natural instructions
             prompt = f"""
-You are a helpful student support assistant. Answer the question based on the provided context from official student documents.
+You are a friendly PUPQC student support assistant. Answer the question based on the provided context from official student documents.
+
+Guidelines:
+- Write in a natural, conversational tone like a helpful student assistant
+- NEVER mention page numbers, document names, or technical references
+- Use bullet points (•) for lists, not asterisks (*)
+- If information seems incomplete, acknowledge you're still learning
+- Keep answers clear, friendly, and helpful for students
+- Focus on being genuinely helpful rather than robotic
 
 Context:
 {context}
 
 Question: {question}
 
-Please provide a helpful answer based on the context. If specific page numbers are mentioned in the context, include them in your response.
+Please provide a helpful, natural answer without any technical references:
 """
             
             response = self.model.generate_content(prompt)
             answer = response.text
             
-            # Format sources
+            # Additional cleaning of technical artifacts that might slip through
+            answer = self._clean_response(answer)
+            
+            # Format sources (but don't include in answer)
             sources = [
                 {
                     "page": chunk['page'],
@@ -281,12 +293,24 @@ Please provide a helpful answer based on the context. If specific page numbers a
         except Exception as e:
             logger.error(f"❌ Error answering question: {e}")
             return {
-                "answer": "I'm sorry, I'm having trouble processing your question right now. Please try again later.",
+                "answer": "I'm having trouble processing that right now - let me try again! You could also try rephrasing your question or asking about something else related to PUPQC academics.",
                 "sources": [],
                 "response_time_ms": 0,
                 "session_id": session_id,
                 "error": str(e)
             }
+    
+    def _clean_response(self, answer: str) -> str:
+        """Clean response to remove technical artifacts and improve formatting"""
+        # Remove technical references that Gemini might still include
+        answer = re.sub(r'page\s+\d+(?:[-–]\d+)?', '', answer, flags=re.IGNORECASE)
+        answer = re.sub(r'pages?\s+\d+(?:,\s*\d+)*(?:,?\s*and\s*\d+)?', '', answer, flags=re.IGNORECASE)
+        answer = re.sub(r'document\s+\d+', '', answer, flags=re.IGNORECASE)
+        answer = re.sub(r'section\s+\d+(?:\.\d+)*', '', answer, flags=re.IGNORECASE)
+        answer = re.sub(r'\*\s*', '• ', answer)  # Convert asterisks to bullets
+        answer = re.sub(r'\s+', ' ', answer).strip()  # Clean extra whitespace
+        
+        return answer
     
     def _search_documents(self, question: str, limit: int = 5) -> List[Dict]:
         """Simple keyword-based document search using PostgreSQL full-text search"""
@@ -295,6 +319,7 @@ Please provide a helpful answer based on the context. If specific page numbers a
             # Get student chatbot
             student_bot = db.query(Chatbot).filter(Chatbot.type == ChatbotType.STUDENT).first()
             if not student_bot:
+                logger.warning("No student chatbot found in database")
                 return []
             
             # Simple keyword search in document chunks
@@ -325,6 +350,9 @@ Please provide a helpful answer based on the context. If specific page numbers a
             scored_chunks.sort(key=lambda x: x['score'], reverse=True)
             return scored_chunks[:limit]
         
+        except Exception as e:
+            logger.error(f"Error searching documents: {e}")
+            return []
         finally:
             db.close()
     
@@ -367,6 +395,7 @@ Please provide a helpful answer based on the context. If specific page numbers a
         try:
             student_bot = db.query(Chatbot).filter(Chatbot.type == ChatbotType.STUDENT).first()
             if not student_bot:
+                logger.warning("No student chatbot found")
                 return []
             
             documents = db.query(DocModel).filter(DocModel.chatbot_id == student_bot.id).all()
@@ -383,6 +412,9 @@ Please provide a helpful answer based on the context. If specific page numbers a
                 }
                 for doc in documents
             ]
+        except Exception as e:
+            logger.error(f"Error getting student documents: {e}")
+            return []
         finally:
             db.close()
     
@@ -392,6 +424,7 @@ Please provide a helpful answer based on the context. If specific page numbers a
         try:
             doc = db.query(DocModel).filter(DocModel.id == document_id).first()
             if not doc:
+                logger.warning(f"Document {document_id} not found")
                 return False
             
             # Delete associated chunks
@@ -406,6 +439,7 @@ Please provide a helpful answer based on the context. If specific page numbers a
         
         except Exception as e:
             logger.error(f"Error deleting document: {e}")
+            db.rollback()
             return False
         finally:
             db.close()
