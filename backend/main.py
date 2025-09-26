@@ -748,7 +748,10 @@ async def serve_widget():
     
     let sessionId = generateSessionId();
     let adminChatMode = false;
-    let adminChatSessionId = null;    
+    let adminChatSessionId = null;
+    let pollingInterval = null;
+    let lastMessageId = 0;
+    
     // Widget HTML template - PUPQC MAROON BRANDING
     const widgetHTML = '<div id="' + WIDGET_ID + '" style="position: fixed; bottom: 20px; right: 20px; z-index: 9999; font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif;"><div id="chat-toggle" style="width: 60px; height: 60px; border-radius: 50%; background: linear-gradient(135deg, #7c2d12, #991b1b); color: white; border: none; cursor: pointer; box-shadow: 0 4px 12px rgba(124, 45, 18, 0.4); display: flex; align-items: center; justify-content: center; font-size: 24px; transition: all 0.3s ease; position: relative;"><span id="chat-icon">💬</span><span id="close-icon" style="display: none;">✕</span></div><div id="chat-window" style="position: absolute; bottom: 80px; right: 0; width: 350px; height: 500px; background: white; border-radius: 12px; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15); display: none; flex-direction: column; overflow: hidden; border: 1px solid #e5e7eb;"><div style="padding: 16px; background: linear-gradient(135deg, #7c2d12, #991b1b); color: white; border-radius: 12px 12px 0 0;"><h3 style="margin: 0; font-size: 16px; font-weight: 600;">PUPQC Student Assistant</h3><p style="margin: 4px 0 0 0; font-size: 12px; opacity: 0.9;">Ask me about academic information</p></div><div id="chat-messages" style="flex: 1; padding: 16px; overflow-y: auto; background: #f9fafb; max-height: 350px;"><div style="background: white; padding: 12px; border-radius: 8px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);"><p style="margin: 0; font-size: 14px; color: #374151;">Hello! I am your PUPQC Student Assistant. I can help you with academic questions, course information, policies, deadlines, and more. How can I assist you today?</p></div></div><div style="padding: 16px; border-top: 1px solid #e5e7eb; background: white;"><div style="display: flex; gap: 8px;"><input type="text" id="chat-input" placeholder="Ask me anything about PUPQC..." style="flex: 1; padding: 10px 12px; border: 1px solid #d1d5db; border-radius: 20px; outline: none; font-size: 14px;"><button id="chat-send" style="padding: 10px 16px; background: #7c2d12; color: white; border: none; border-radius: 20px; cursor: pointer; font-size: 14px; font-weight: 500;">Send</button></div><div style="padding: 8px 0 0 0;"><button id="admin-chat-btn" style="width: 100%; padding: 8px 12px; background: #f8fafc; border: 1px solid #e5e7eb; border-radius: 15px; font-size: 13px; color: #6b7280; cursor: pointer; transition: all 0.2s; font-family: inherit;">Need Human Help? Talk to Admin</button></div></div></div></div>';
     
@@ -901,37 +904,52 @@ async def serve_widget():
         }
     }
     
-    // Poll for admin responses
+    // Poll for admin responses - FIXED VERSION
     function startPollingForAdminResponse() {
         if (!adminChatMode || !adminChatSessionId) return;
         
-        const pollInterval = setInterval(async () => {
+        // Stop any existing polling first
+        if (pollingInterval) {
+            clearInterval(pollingInterval);
+            pollingInterval = null;
+        }
+        
+        pollingInterval = setInterval(async () => {
             try {
                 const response = await fetch(API_BASE_URL + '/direct-chat/get-messages', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ session_id: adminChatSessionId })
+                    body: JSON.stringify({ 
+                        session_id: adminChatSessionId,
+                        last_seen: lastMessageId 
+                    })
                 });
                 
                 if (response.ok) {
                     const data = await response.json();
                     // Show new admin messages
                     data.new_messages?.forEach(msg => {
-                        if (msg.sender_type === 'admin') {
+                        if (msg.sender_type === 'admin' && msg.id > lastMessageId) {
                             addMessage(msg.message, false);
+                            lastMessageId = msg.id;
                         }
                     });
                 }
             } catch (error) {
                 console.log('Polling error:', error);
             }
-        }, 3000); // Poll every 3 seconds
+        }, 3000);
         
         // Stop polling after 30 minutes
-        setTimeout(() => clearInterval(pollInterval), 30 * 60 * 1000);
+        setTimeout(() => {
+            if (pollingInterval) {
+                clearInterval(pollingInterval);
+                pollingInterval = null;
+            }
+        }, 30 * 60 * 1000);
     }
     
-    // Send message
+    // Send message - FIXED VERSION
     async function sendMessage() {
         const message = chatInput.value.trim();
         if (!message) return;
@@ -1005,7 +1023,7 @@ async def serve_widget():
         }
     });
 
-    // Admin chat button event listener
+    // Admin chat button event listener - FIXED VERSION
     const adminChatBtn = document.getElementById('admin-chat-btn');
     if (adminChatBtn) {
         adminChatBtn.addEventListener('click', () => {
@@ -1017,6 +1035,9 @@ async def serve_widget():
             adminChatBtn.style.display = 'none';
             chatInput.placeholder = 'Type your message to admin...';
             
+            // Start polling once when admin chat begins
+            startPollingForAdminResponse();
+            
             console.log('Admin chat mode activated');
         });
     }
@@ -1025,7 +1046,6 @@ async def serve_widget():
     const style = document.createElement('style');
     style.textContent = '@keyframes typing { 0%, 60%, 100% { transform: translateY(0); } 30% { transform: translateY(-10px); } } #chat-toggle:hover { transform: scale(1.05); box-shadow: 0 6px 16px rgba(124, 45, 18, 0.5); } #chat-input:focus { border-color: #7c2d12; box-shadow: 0 0 0 3px rgba(124, 45, 18, 0.1); } #chat-send:hover { background: #991b1b; } @media (max-width: 480px) { #' + WIDGET_ID + ' { bottom: 10px; right: 10px; } #chat-window { width: calc(100vw - 40px); height: calc(100vh - 140px); right: -10px; bottom: 80px; } }';
     document.head.appendChild(style);
-
     
 })();"""
     return widget_js
