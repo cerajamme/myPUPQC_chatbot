@@ -166,6 +166,10 @@ class DirectMessageResponse(BaseModel):
     message: str
     sent_at: str
 
+class GetMessagesRequest(BaseModel):
+    session_id: str
+    last_seen: Optional[int] = 0
+
 class UserMessageRequest(BaseModel):
     session_id: str
     message: str
@@ -1208,7 +1212,7 @@ async def send_user_message(
     
 @app.post("/direct-chat/get-messages")
 async def get_user_messages(
-    request: dict,
+    request: GetMessagesRequest,
     db: Session = Depends(get_db)
 ):
     """Get new messages for user (polling endpoint)"""
