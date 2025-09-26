@@ -1214,7 +1214,7 @@ async def get_user_messages(
     """Get new messages for user (polling endpoint)"""
     try:
         session_id = request.get("session_id")
-        last_seen = request.get("last_seen", 0)  # Message ID
+        last_seen = request.get("last_seen", 0)
         
         chat = db.query(DirectChat).filter(
             DirectChat.session_id == session_id
@@ -1243,7 +1243,6 @@ async def get_user_messages(
     except Exception as e:
         logger.error(f"Error getting user messages: {e}")
         return {"new_messages": []}
-
 # Analytics endpoints
 @app.get("/admin/student/analytics")
 async def get_student_analytics(
