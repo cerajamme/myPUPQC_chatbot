@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import Login from './components/Login';
 import Dashboard from './components/Dashboard';
+import ForgotPassword from './components/ForgotPassword';
+import ResetPassword from './components/ResetPassword';
 import { auth } from './api';
 import './App.css';
 
@@ -59,6 +61,22 @@ function App() {
             element={
               !isAuthenticated ? 
                 <Login onLogin={handleLogin} /> : 
+                <Navigate to="/dashboard" replace />
+            } 
+          />
+          <Route 
+            path="/forgot-password" 
+            element={
+              !isAuthenticated ? 
+                <ForgotPassword /> : 
+                <Navigate to="/dashboard" replace />
+            } 
+          />
+          <Route 
+            path="/reset-password" 
+            element={
+              !isAuthenticated ? 
+                <ResetPassword /> : 
                 <Navigate to="/dashboard" replace />
             } 
           />

@@ -4,12 +4,17 @@ import FileUpload from './FileUpload';
 import DocumentList from './DocumentList';
 import Analytics from './Analytics';
 import './DashboardStyles.css';
+import ProfileSettings from './ProfileSettings';
+import DirectInquiries from './DirectInquiries';
+
 
 const Dashboard = ({ user, onLogout }) => {
   const [activeTab, setActiveTab] = useState('upload');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const profileRef = useRef(null);
+  const [showProfileSettings, setShowProfileSettings] = useState(false);
+  
 
   // Close profile menu when clicking outside
   useEffect(() => {
@@ -45,6 +50,15 @@ const Dashboard = ({ user, onLogout }) => {
     { 
       id: 'chat', 
       label: 'Test Chat',
+      icon: (
+        <svg className="navbar-nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+        </svg>
+      )
+    },
+    { 
+      id: 'inquiries', 
+      label: 'Direct Inquries',
       icon: (
         <svg className="navbar-nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
@@ -178,6 +192,15 @@ const Dashboard = ({ user, onLogout }) => {
                   {/* <button className="profile-dropdown-item">Your Profile</button> */}
                   <button 
                     className="profile-dropdown-item"
+                    onClick={() => {
+                      setShowProfileSettings(true);
+                      setProfileMenuOpen(false);
+                    }}
+                  >
+                    Account Settings
+                  </button>
+                  <button 
+                    className="profile-dropdown-item"
                     onClick={onLogout}
                   >
                     Sign out
@@ -214,10 +237,22 @@ const Dashboard = ({ user, onLogout }) => {
       {/* Content */}
       <div className="dashboard-content">
         {activeTab === 'chat' && <TestChat />}
+        {activeTab === 'inquiries' && <DirectInquiries />}
         {activeTab === 'upload' && <FileUpload />}
         {activeTab === 'documents' && <DocumentList />}
         {activeTab === 'analytics' && <Analytics />}
+        
       </div>
+      {showProfileSettings && (
+        <ProfileSettings
+          user={user}
+          onUserUpdate={(updatedUser) => {
+            // Update user state if needed
+            console.log('User updated:', updatedUser);
+          }}
+          onClose={() => setShowProfileSettings(false)}
+        />
+      )}
     </div>
   );
 };

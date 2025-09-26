@@ -32,9 +32,22 @@ class User(Base):
     is_superuser = Column(Boolean, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     last_login = Column(DateTime(timezone=True), nullable=True)
+    reset_tokens = relationship("PasswordResetToken", back_populates="user")
     
     def __repr__(self):
         return f"<User(email='{self.email}', name='{self.full_name}')>"
+
+class PasswordResetToken(Base):
+    __tablename__ = "password_reset_tokens"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    token = Column(String(100), unique=True, nullable=False)
+    expires_at = Column(DateTime, nullable=False)
+    used = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    user = relationship("User", back_populates="reset_tokens")
 
 class Chatbot(Base):
     """The three types of chatbots: Student, Faculty, Guest"""
@@ -198,3 +211,36 @@ class ChatOption(Base):
     
     def __repr__(self):
         return f"<ChatOption(label='{self.label[:50]}...', active={self.is_active})>"
+    
+class DirectChat(Base):
+    """Direct chat sessions between users and admins"""
+    __tablename__ = "direct_chats"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    session_id = Column(String(255), unique=True, nullable=False, index=True)
+    user_ip = Column(String(45), nullable=True)
+    status = Column(String(20), default='waiting', index=True)  # waiting, active, closed
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    last_activity = Column(DateTime(timezone=True), server_default=func.now())
+    
+    # Relationships
+    messages = relationship("DirectMessage", back_populates="chat", cascade="all, delete-orphan")
+    
+    def __repr__(self):
+        return f"<DirectChat(session_id='{self.session_id}', status='{self.status}')>"
+
+class DirectMessage(Base):
+    """Messages in direct chat sessions"""
+    __tablename__ = "direct_messages"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    chat_id = Column(Integer, ForeignKey("direct_chats.id"), nullable=False, index=True)
+    sender_type = Column(String(10), nullable=False, index=True)  # 'user' or 'admin'
+    message = Column(Text, nullable=False)
+    sent_at = Column(DateTime(timezone=True), server_default=func.now())
+    
+    # Relationships
+    chat = relationship("DirectChat", back_populates="messages")
+    
+    def __repr__(self):
+        return f"<DirectMessage(chat_id={self.chat_id}, sender='{self.sender_type}')>"

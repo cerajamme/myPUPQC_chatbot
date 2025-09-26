@@ -26,6 +26,17 @@ api.interceptors.request.use((config) => {
 export const auth = {
   login: (email, password) => api.post('/auth/login', { email, password }),
   getCurrentUser: () => api.get('/auth/me'),
+  forgotPassword: (email) => api.post('/auth/forgot-password', { email }),
+  resetPassword: (token, newPassword) => api.post('/auth/reset-password', { 
+    token, 
+    new_password: newPassword 
+  }),
+  verifyResetToken: (token) => api.post('/auth/verify-reset-token', { token }),
+  updateProfile: (profileData) => api.put('/auth/profile', profileData),
+  changePassword: (currentPassword, newPassword) => api.put('/auth/change-password', {
+    current_password: currentPassword,
+    new_password: newPassword
+  }),
 };
 
 export const admin = {
@@ -43,7 +54,10 @@ export const admin = {
   getAnalytics: () => api.get('/admin/student/analytics'),
   getChatOptions: () => api.get('/api/chat-options'),
   createChatOption: (optionData) => api.post('/api/admin/chat-options', optionData),
-  deleteChatOption: (optionId) => api.delete(`/api/admin/chat-options/${optionId}`)
+  deleteChatOption: (optionId) => api.delete(`/api/admin/chat-options/${optionId}`),
+  getDirectChats: () => api.get('/admin/direct-chats'),
+  getChatMessages: (chatId) => api.get(`/admin/direct-chats/${chatId}/messages`),
+  sendAdminMessage: (chatId, message) => api.post(`/admin/direct-chats/${chatId}/messages`, { message }),
 };
 
 export default api;

@@ -13,11 +13,13 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from fastapi.responses import FileResponse
 from pathlib import Path
+from models import User, Chatbot, Document as DocModel, Conversation, ChatbotType, ChatOption, PasswordResetToken, DirectChat, DirectMessage
 # Local imports
 from config import settings, validate_settings, get_upload_path, is_file_allowed, is_file_size_valid
 from database import get_db, create_tables, create_initial_data, health_check, get_chatbot_by_type
-from auth import login_admin, get_current_active_user, require_admin
-from models import User, Chatbot, Document as DocModel, Conversation, ChatbotType, ChatOption
+from auth import login_admin, get_current_active_user, require_admin, get_password_hash
+from models import User, Chatbot, Document as DocModel, Conversation, ChatbotType, ChatOption, PasswordResetToken
+from email_service import get_email_service, PasswordResetService
 
 # Setup logging
 logging.basicConfig(level=getattr(logging, settings.log_level))
@@ -97,6 +99,16 @@ class LoginRequest(BaseModel):
     email: str
     password: str
 
+class ForgotPasswordRequest(BaseModel):
+    email: str
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str
+
+class VerifyTokenRequest(BaseModel):
+    token: str
+
 class ChatRequest(BaseModel):
     message: str
     session_id: Optional[str] = None
@@ -133,6 +145,30 @@ class ChatOptionResponse(BaseModel):
     order: int
     is_active: bool
     created_at: str
+
+class DirectChatCreate(BaseModel):
+    session_id: str
+    user_ip: Optional[str] = None
+
+class DirectChatResponse(BaseModel):
+    id: int
+    session_id: str
+    status: str
+    created_at: str
+    last_activity: str
+
+class DirectMessageCreate(BaseModel):
+    message: str
+
+class DirectMessageResponse(BaseModel):
+    id: int
+    sender_type: str
+    message: str
+    sent_at: str
+
+class UserMessageRequest(BaseModel):
+    session_id: str
+    message: str
 
 # Helper function to clean bot responses
 def clean_bot_response(response_text: str) -> str:
@@ -238,6 +274,184 @@ async def get_current_user_info(current_user: User = Depends(get_current_active_
         "is_superuser": current_user.is_superuser,
         "last_login": current_user.last_login.isoformat() if current_user.last_login else None
     }
+
+
+# Password Reset Endpoints
+@app.post("/auth/forgot-password")
+async def forgot_password(request: ForgotPasswordRequest, db: Session = Depends(get_db)):
+    """Send password reset email"""
+    try:
+        email = request.email
+        if not email:
+            raise HTTPException(status_code=400, detail="Email is required")
+                
+        # Find user by email
+        user = db.query(User).filter(User.email == email).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="No account found with this email address")
+        
+        # Generate reset token
+        reset_token = PasswordResetService.create_reset_token(user.id, db)
+        
+        # Send email
+        email_service = get_email_service()
+        success = await email_service.send_password_reset_email(email, reset_token, user.full_name)
+        
+        if success:
+            logger.info(f"Password reset email sent to: {email}")
+            return {"message": "Password reset email sent"}
+        else:
+            logger.error(f"Failed to send password reset email to: {email}")
+            raise HTTPException(status_code=500, detail="Failed to send reset email")
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Forgot password error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to send reset email")
+
+@app.post("/auth/verify-reset-token")
+async def verify_reset_token(request: VerifyTokenRequest, db: Session = Depends(get_db)):
+    """Verify if reset token is valid"""
+    try:
+        token = request.token
+        if not token:
+            raise HTTPException(status_code=400, detail="Token is required")
+        
+        user_id = PasswordResetService.verify_reset_token(token, db)
+        if not user_id:
+            raise HTTPException(status_code=400, detail="Invalid or expired token")
+        
+        return {"message": "Token is valid"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Token verification error: {e}")
+        raise HTTPException(status_code=500, detail="Token verification failed")
+
+@app.post("/auth/reset-password")
+async def reset_password(request: ResetPasswordRequest, db: Session = Depends(get_db)):
+    """Reset password using token"""
+    try:
+        token = request.token
+        new_password = request.new_password
+        
+        if not token or not new_password:
+            raise HTTPException(status_code=400, detail="Token and new password are required")
+        
+        # Verify token
+        user_id = PasswordResetService.verify_reset_token(token, db)
+        if not user_id:
+            raise HTTPException(status_code=400, detail="Invalid or expired token")
+        
+        # Get user
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        # Update password - use hashed_password field
+        user.hashed_password = get_password_hash(new_password)
+        
+        # Mark token as used
+        PasswordResetService.mark_token_used(token, db)
+        
+        db.commit() 
+        
+        # Send confirmation email
+        email_service = get_email_service()
+        await email_service.send_password_changed_notification(user.email, user.full_name)
+        
+        logger.info(f"Password reset successful for user: {user.email}")
+        return {"message": "Password reset successful"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Reset password error: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Failed to reset password")
+
+class UpdateProfileRequest(BaseModel):
+    full_name: Optional[str] = None
+    email: Optional[str] = None
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+@app.put("/auth/profile")
+async def update_profile(
+    request: UpdateProfileRequest,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    """Update user profile information"""
+    try:
+        # Check if email is already taken by another user
+        if request.email and request.email != current_user.email:
+            existing_user = db.query(User).filter(
+                User.email == request.email,
+                User.id != current_user.id
+            ).first()
+            if existing_user:
+                raise HTTPException(status_code=400, detail="Email already registered")
+        
+        # Update fields if provided
+        if request.full_name:
+            current_user.full_name = request.full_name.strip()
+        if request.email:
+            current_user.email = request.email.lower().strip()
+        
+        db.commit()
+        
+        return {
+            "message": "Profile updated successfully",
+            "user": {
+                "id": current_user.id,
+                "email": current_user.email,
+                "full_name": current_user.full_name
+            }
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Profile update error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to update profile")
+
+@app.put("/auth/change-password")
+async def change_password(
+    request: ChangePasswordRequest,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    """Change user password with current password verification"""
+    try:
+        from auth import verify_password
+        
+        # Verify current password - use hashed_password field
+        if not verify_password(request.current_password, current_user.hashed_password):
+            raise HTTPException(status_code=400, detail="Current password is incorrect")
+        
+        # Update password - use hashed_password field
+        current_user.hashed_password = get_password_hash(request.new_password)
+        db.commit()
+        
+        # Send notification email
+        email_service = get_email_service()
+        await email_service.send_password_changed_notification(
+            current_user.email, 
+            current_user.full_name
+        )
+        
+        return {"message": "Password changed successfully"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Password change error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to change password")
 
 # Student chatbot management endpoints
 @app.get("/admin/student/info")
@@ -533,9 +747,10 @@ async def serve_widget():
     }
     
     let sessionId = generateSessionId();
-    
+    let adminChatMode = false;
+    let adminChatSessionId = null;    
     // Widget HTML template - PUPQC MAROON BRANDING
-    const widgetHTML = '<div id="' + WIDGET_ID + '" style="position: fixed; bottom: 20px; right: 20px; z-index: 9999; font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif;"><div id="chat-toggle" style="width: 60px; height: 60px; border-radius: 50%; background: linear-gradient(135deg, #7c2d12, #991b1b); color: white; border: none; cursor: pointer; box-shadow: 0 4px 12px rgba(124, 45, 18, 0.4); display: flex; align-items: center; justify-content: center; font-size: 24px; transition: all 0.3s ease; position: relative;"><span id="chat-icon">💬</span><span id="close-icon" style="display: none;">✕</span></div><div id="chat-window" style="position: absolute; bottom: 80px; right: 0; width: 350px; height: 500px; background: white; border-radius: 12px; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15); display: none; flex-direction: column; overflow: hidden; border: 1px solid #e5e7eb;"><div style="padding: 16px; background: linear-gradient(135deg, #7c2d12, #991b1b); color: white; border-radius: 12px 12px 0 0;"><h3 style="margin: 0; font-size: 16px; font-weight: 600;">PUPQC Student Assistant</h3><p style="margin: 4px 0 0 0; font-size: 12px; opacity: 0.9;">Ask me about academic information</p></div><div id="chat-messages" style="flex: 1; padding: 16px; overflow-y: auto; background: #f9fafb; max-height: 350px;"><div style="background: white; padding: 12px; border-radius: 8px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);"><p style="margin: 0; font-size: 14px; color: #374151;">Hello! I am your PUPQC Student Assistant. I can help you with academic questions, course information, policies, deadlines, and more. How can I assist you today?</p></div></div><div style="padding: 16px; border-top: 1px solid #e5e7eb; background: white;"><div style="display: flex; gap: 8px;"><input type="text" id="chat-input" placeholder="Ask me anything about PUPQC..." style="flex: 1; padding: 10px 12px; border: 1px solid #d1d5db; border-radius: 20px; outline: none; font-size: 14px;"><button id="chat-send" style="padding: 10px 16px; background: #7c2d12; color: white; border: none; border-radius: 20px; cursor: pointer; font-size: 14px; font-weight: 500;">Send</button></div></div></div></div>';
+    const widgetHTML = '<div id="' + WIDGET_ID + '" style="position: fixed; bottom: 20px; right: 20px; z-index: 9999; font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif;"><div id="chat-toggle" style="width: 60px; height: 60px; border-radius: 50%; background: linear-gradient(135deg, #7c2d12, #991b1b); color: white; border: none; cursor: pointer; box-shadow: 0 4px 12px rgba(124, 45, 18, 0.4); display: flex; align-items: center; justify-content: center; font-size: 24px; transition: all 0.3s ease; position: relative;"><span id="chat-icon">💬</span><span id="close-icon" style="display: none;">✕</span></div><div id="chat-window" style="position: absolute; bottom: 80px; right: 0; width: 350px; height: 500px; background: white; border-radius: 12px; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15); display: none; flex-direction: column; overflow: hidden; border: 1px solid #e5e7eb;"><div style="padding: 16px; background: linear-gradient(135deg, #7c2d12, #991b1b); color: white; border-radius: 12px 12px 0 0;"><h3 style="margin: 0; font-size: 16px; font-weight: 600;">PUPQC Student Assistant</h3><p style="margin: 4px 0 0 0; font-size: 12px; opacity: 0.9;">Ask me about academic information</p></div><div id="chat-messages" style="flex: 1; padding: 16px; overflow-y: auto; background: #f9fafb; max-height: 350px;"><div style="background: white; padding: 12px; border-radius: 8px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);"><p style="margin: 0; font-size: 14px; color: #374151;">Hello! I am your PUPQC Student Assistant. I can help you with academic questions, course information, policies, deadlines, and more. How can I assist you today?</p></div></div><div style="padding: 16px; border-top: 1px solid #e5e7eb; background: white;"><div style="display: flex; gap: 8px;"><input type="text" id="chat-input" placeholder="Ask me anything about PUPQC..." style="flex: 1; padding: 10px 12px; border: 1px solid #d1d5db; border-radius: 20px; outline: none; font-size: 14px;"><button id="chat-send" style="padding: 10px 16px; background: #7c2d12; color: white; border: none; border-radius: 20px; cursor: pointer; font-size: 14px; font-weight: 500;">Send</button></div><div style="padding: 8px 0 0 0;"><button id="admin-chat-btn" style="width: 100%; padding: 8px 12px; background: #f8fafc; border: 1px solid #e5e7eb; border-radius: 15px; font-size: 13px; color: #6b7280; cursor: pointer; transition: all 0.2s; font-family: inherit;">Need Human Help? Talk to Admin</button></div></div></div></div>';
     
     // Add widget to page
     document.body.insertAdjacentHTML('beforeend', widgetHTML);
@@ -693,29 +908,55 @@ async def serve_widget():
         
         hideQuickOptions();
         addMessage(message, true);
-        chatInput.value = '';
+        chatInput.value = '';   
         showTyping();
         
         try {
-            const response = await fetch(API_BASE_URL + '/chat/student', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    message: message,
-                    session_id: sessionId
-                })
-            });
+            let response;
             
-            const data = await response.json();
-            hideTyping();
-            
-            if (response.ok) {
-                addMessage(data.answer, false);
+            if (adminChatMode) {
+                // Send to admin chat system
+                response = await fetch(API_BASE_URL + '/direct-chat/user-message', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        session_id: adminChatSessionId,
+                        message: message
+                    })
+                });
+                
+                const data = await response.json();
+                hideTyping();
+                
+                if (response.ok) {
+                    addMessage('Message sent to admin. Please wait for a response...', false);
+                } else {
+                    addMessage('Sorry, there was an error connecting to admin support.', false);
+                }
             } else {
-                console.log('API Error:', data);
-                addMessage('Sorry, I encountered an error. Please try again.', false);
+                // Send to AI system (existing code)
+                response = await fetch(API_BASE_URL + '/chat/student', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        message: message,
+                        session_id: sessionId
+                    })
+                });
+                
+                const data = await response.json();
+                hideTyping();
+                
+                if (response.ok) {
+                    addMessage(data.answer, false);
+                } else {
+                    console.log('API Error:', data);
+                    addMessage('Sorry, I encountered an error. Please try again.', false);
+                }
             }
             
         } catch (error) {
@@ -733,6 +974,22 @@ async def serve_widget():
             sendMessage();
         }
     });
+
+    // Admin chat button event listener
+    const adminChatBtn = document.getElementById('admin-chat-btn');
+    if (adminChatBtn) {
+        adminChatBtn.addEventListener('click', () => {
+            adminChatMode = true;
+            adminChatSessionId = 'admin_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now();
+            
+            chatMessages.innerHTML = '<div style="background: #fff7ed; padding: 12px; border-radius: 8px; margin-bottom: 12px; border: 1px solid #fed7aa;"><p style="margin: 0; font-size: 14px; color: #9a3412;">🔄 Connecting you with an admin...</p><p style="margin: 8px 0 0 0; font-size: 12px; color: #a16207;">Please wait while we connect you with a live administrator. You can start typing your message.</p></div>';
+            
+            adminChatBtn.style.display = 'none';
+            chatInput.placeholder = 'Type your message to admin...';
+            
+            console.log('Admin chat mode activated');
+        });
+    }
     
     // Add CSS animations
     const style = document.createElement('style');
@@ -742,6 +999,162 @@ async def serve_widget():
 })();"""
     return widget_js
 
+# Direct Chat Endpoints
+@app.post("/admin/direct-chats", response_model=DirectChatResponse)
+async def create_direct_chat(
+    request: DirectChatCreate,
+    current_user: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """Create new direct chat session"""
+    try:
+        new_chat = DirectChat(
+            session_id=request.session_id,
+            user_ip=request.user_ip,
+            status='waiting'
+        )
+        
+        db.add(new_chat)
+        db.commit()
+        db.refresh(new_chat)
+        
+        return DirectChatResponse(
+            id=new_chat.id,
+            session_id=new_chat.session_id,
+            status=new_chat.status,
+            created_at=new_chat.created_at.isoformat(),
+            last_activity=new_chat.last_activity.isoformat()
+        )
+    except Exception as e:
+        logger.error(f"Error creating direct chat: {e}")
+        raise HTTPException(status_code=500, detail="Failed to create chat session")
+
+@app.get("/admin/direct-chats", response_model=List[DirectChatResponse])
+async def list_direct_chats(
+    current_user: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """List active direct chats for admin"""
+    try:
+        chats = db.query(DirectChat).filter(
+            DirectChat.status.in_(['waiting', 'active'])
+        ).order_by(DirectChat.created_at.desc()).all()
+        
+        return [
+            DirectChatResponse(
+                id=chat.id,
+                session_id=chat.session_id,
+                status=chat.status,
+                created_at=chat.created_at.isoformat(),
+                last_activity=chat.last_activity.isoformat()
+            )
+            for chat in chats
+        ]
+    except Exception as e:
+        logger.error(f"Error listing direct chats: {e}")
+        return []
+
+@app.get("/admin/direct-chats/{chat_id}/messages", response_model=List[DirectMessageResponse])
+async def get_chat_messages(
+    chat_id: int,
+    current_user: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """Get messages for a specific chat"""
+    try:
+        messages = db.query(DirectMessage).filter(
+            DirectMessage.chat_id == chat_id
+        ).order_by(DirectMessage.sent_at.asc()).all()
+        
+        return [
+            DirectMessageResponse(
+                id=msg.id,
+                sender_type=msg.sender_type,
+                message=msg.message,
+                sent_at=msg.sent_at.isoformat()
+            )
+            for msg in messages
+        ]
+    except Exception as e:
+        logger.error(f"Error getting chat messages: {e}")
+        return []
+
+@app.post("/admin/direct-chats/{chat_id}/messages")
+async def send_admin_message(
+    chat_id: int,
+    request: DirectMessageCreate,
+    current_user: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """Send message from admin to user"""
+    try:
+        # Check if chat exists
+        chat = db.query(DirectChat).filter(DirectChat.id == chat_id).first()
+        if not chat:
+            raise HTTPException(status_code=404, detail="Chat not found")
+        
+        # Create message
+        new_message = DirectMessage(
+            chat_id=chat_id,
+            sender_type='admin',
+            message=request.message
+        )
+        
+        # Update chat status and last activity
+        chat.status = 'active'
+        chat.last_activity = datetime.utcnow()
+        
+        db.add(new_message)
+        db.commit()
+        
+        return {"message": "Message sent successfully"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error sending admin message: {e}")
+        raise HTTPException(status_code=500, detail="Failed to send message")
+
+@app.post("/direct-chat/user-message")
+async def send_user_message(
+    request: UserMessageRequest,
+    db: Session = Depends(get_db)
+):
+    """Send message from user to admin"""
+    try:
+        # Find or create chat session
+        chat = db.query(DirectChat).filter(
+            DirectChat.session_id == request.session_id
+        ).first()
+        
+        if not chat:
+            # Create new chat session
+            chat = DirectChat(
+                session_id=request.session_id,
+                status='waiting'
+            )
+            db.add(chat)
+            db.flush()
+        
+        # Create message
+        new_message = DirectMessage(
+            chat_id=chat.id,
+            sender_type='user',
+            message=request.message
+        )
+        
+        # Update last activity
+        chat.last_activity = datetime.utcnow()
+        
+        db.add(new_message)
+        db.commit()
+        
+        return {"message": "Message sent to admin", "status": chat.status}
+        
+    except Exception as e:
+        logger.error(f"Error sending user message: {e}")
+        raise HTTPException(status_code=500, detail="Failed to send message")
+    
 # Analytics endpoints
 @app.get("/admin/student/analytics")
 async def get_student_analytics(

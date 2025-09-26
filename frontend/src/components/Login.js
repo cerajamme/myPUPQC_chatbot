@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
 import './LoginStyles.css';
 
 const Login = ({ onLogin }) => {
@@ -50,10 +51,6 @@ const Login = ({ onLogin }) => {
     setShowPassword(!showPassword);
   };
 
-  const handleForgotPassword = () => {
-    alert('Forgot password functionality will be implemented soon.');
-  };
-
   return (
     <div 
       className="login-container"
@@ -67,7 +64,6 @@ const Login = ({ onLogin }) => {
             <div className="login-logo">
               <img src="/mypupqc-chatbot.png" alt="PC Logo" className="logo-img" />
             </div>
-
 
             <h1 className="login-title">myPUPQC.ai</h1>
             <h3 className="login-title">Chatbot System</h3>
@@ -124,13 +120,12 @@ const Login = ({ onLogin }) => {
             )}
 
             <div className="login-forgot-section">
-              <button
-                type="button"
+              <Link 
+                to="/forgot-password" 
                 className="login-forgot-link"
-                onClick={handleForgotPassword}
               >
                 Forgot password?
-              </button>
+              </Link>
             </div>
 
             <button
