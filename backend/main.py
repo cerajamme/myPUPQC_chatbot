@@ -962,8 +962,6 @@ async def serve_widget():
                 
                 if (response.ok) {
                     addMessage('Message sent to admin. Please wait for a response...', false);
-                    // Start polling for admin responses
-                    startPollingForAdminResponse();
                 } else {
                     addMessage('Sorry, there was an error connecting to admin support.', false);
                 }
