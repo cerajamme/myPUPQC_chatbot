@@ -1217,8 +1217,8 @@ async def get_user_messages(
 ):
     """Get new messages for user (polling endpoint)"""
     try:
-        session_id = request.get("session_id")
-        last_seen = request.get("last_seen", 0)
+        session_id = request.session_id
+        last_seen = request.last_seen
         
         chat = db.query(DirectChat).filter(
             DirectChat.session_id == session_id
