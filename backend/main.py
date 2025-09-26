@@ -901,6 +901,36 @@ async def serve_widget():
         }
     }
     
+    // Poll for admin responses
+    function startPollingForAdminResponse() {
+        if (!adminChatMode || !adminChatSessionId) return;
+        
+        const pollInterval = setInterval(async () => {
+            try {
+                const response = await fetch(API_BASE_URL + '/direct-chat/get-messages', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ session_id: adminChatSessionId })
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    // Show new admin messages
+                    data.new_messages?.forEach(msg => {
+                        if (msg.sender_type === 'admin') {
+                            addMessage(msg.message, false);
+                        }
+                    });
+                }
+            } catch (error) {
+                console.log('Polling error:', error);
+            }
+        }, 3000); // Poll every 3 seconds
+        
+        // Stop polling after 30 minutes
+        setTimeout(() => clearInterval(pollInterval), 30 * 60 * 1000);
+    }
+    
     // Send message
     async function sendMessage() {
         const message = chatInput.value.trim();
@@ -932,6 +962,8 @@ async def serve_widget():
                 
                 if (response.ok) {
                     addMessage('Message sent to admin. Please wait for a response...', false);
+                    // Start polling for admin responses
+                    startPollingForAdminResponse();
                 } else {
                     addMessage('Sorry, there was an error connecting to admin support.', false);
                 }
@@ -995,6 +1027,7 @@ async def serve_widget():
     const style = document.createElement('style');
     style.textContent = '@keyframes typing { 0%, 60%, 100% { transform: translateY(0); } 30% { transform: translateY(-10px); } } #chat-toggle:hover { transform: scale(1.05); box-shadow: 0 6px 16px rgba(124, 45, 18, 0.5); } #chat-input:focus { border-color: #7c2d12; box-shadow: 0 0 0 3px rgba(124, 45, 18, 0.1); } #chat-send:hover { background: #991b1b; } @media (max-width: 480px) { #' + WIDGET_ID + ' { bottom: 10px; right: 10px; } #chat-window { width: calc(100vw - 40px); height: calc(100vh - 140px); right: -10px; bottom: 80px; } }';
     document.head.appendChild(style);
+
     
 })();"""
     return widget_js
@@ -1155,6 +1188,44 @@ async def send_user_message(
         logger.error(f"Error sending user message: {e}")
         raise HTTPException(status_code=500, detail="Failed to send message")
     
+@app.post("/direct-chat/get-messages")
+async def get_user_messages(
+    request: dict,
+    db: Session = Depends(get_db)
+):
+    """Get new messages for user (polling endpoint)"""
+    try:
+        session_id = request.get("session_id")
+        last_seen = request.get("last_seen", 0)  # Message ID
+        
+        chat = db.query(DirectChat).filter(
+            DirectChat.session_id == session_id
+        ).first()
+        
+        if not chat:
+            return {"new_messages": []}
+        
+        # Get messages after last_seen
+        messages = db.query(DirectMessage).filter(
+            DirectMessage.chat_id == chat.id,
+            DirectMessage.id > last_seen
+        ).order_by(DirectMessage.sent_at.asc()).all()
+        
+        return {
+            "new_messages": [
+                {
+                    "id": msg.id,
+                    "sender_type": msg.sender_type,
+                    "message": msg.message,
+                    "sent_at": msg.sent_at.isoformat()
+                }
+                for msg in messages
+            ]
+        }
+    except Exception as e:
+        logger.error(f"Error getting user messages: {e}")
+        return {"new_messages": []}
+
 # Analytics endpoints
 @app.get("/admin/student/analytics")
 async def get_student_analytics(
