@@ -101,18 +101,18 @@ const Login = ({ onLogin }) => {
   };
 
   // Debug function to test server connection
-  const testConnection = async () => {
-    try {
-      console.log('Testing server connection...');
-      const response = await fetch('https://mypupqcchatbot-production.up.railway.app/ping');
-      const data = await response.json();
-      console.log('Server ping response:', data);
-      setError('Server connection test: ' + (response.ok ? 'SUCCESS' : 'FAILED'));
-    } catch (error) {
-      console.error('Connection test failed:', error);
-      setError('Connection test failed: ' + error.message);
-    }
-  };
+  // const testConnection = async () => {
+  //   try {
+  //     console.log('Testing server connection...');
+  //     const response = await fetch('https://mypupqcchatbot-production.up.railway.app/ping');
+  //     const data = await response.json();
+  //     console.log('Server ping response:', data);
+  //     setError('Server connection test: ' + (response.ok ? 'SUCCESS' : 'FAILED'));
+  //   } catch (error) {
+  //     console.error('Connection test failed:', error);
+  //     setError('Connection test failed: ' + error.message);
+  //   }
+  // };
 
   return (
     <div 
@@ -189,23 +189,6 @@ const Login = ({ onLogin }) => {
               >
                 Forgot password?
               </Link>
-              
-              {/* Debug button - remove in production */}
-              <button
-                type="button"
-                onClick={testConnection}
-                style={{
-                  marginLeft: '10px',
-                  padding: '2px 8px',
-                  fontSize: '12px',
-                  background: '#f3f4f6',
-                  border: '1px solid #d1d5db',
-                  borderRadius: '4px',
-                  cursor: 'pointer'
-                }}
-              >
-                Test Connection
-              </button>
             </div>
 
             <button

@@ -30,17 +30,29 @@ const DirectInquiries = () => {
       const response = await admin.getDirectChats();
       const chats = response.data || [];
       
-      // Filter out closed chats older than 5 minutes for auto-cleanup
-      const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
-      const activeChatsList = chats.filter(chat => {
+      // Filter out active chats completely
+      const filteredChats = chats.filter(chat => {
+        // Remove active chats from display
+        if (chat.status === 'active') {
+          return false;
+        }
+        
+        // Keep waiting chats
+        if (chat.status === 'waiting') {
+          return true;
+        }
+        
+        // Keep recent closed chats for 5 minutes
         if (chat.status === 'closed') {
+          const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
           const lastActivity = new Date(chat.last_activity);
           return lastActivity > fiveMinutesAgo;
         }
-        return true;
+        
+        return false;
       });
       
-      setActiveChats(activeChatsList);
+      setActiveChats(filteredChats);
       setLoading(false);
     } catch (error) {
       console.error('Error loading chats:', error);

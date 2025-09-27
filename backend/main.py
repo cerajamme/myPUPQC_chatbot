@@ -1126,10 +1126,10 @@ async def list_direct_chats(
     current_user: User = Depends(require_admin),
     db: Session = Depends(get_db)
 ):
-    """List active direct chats for admin"""
+    """List direct chats for admin - exclude active chats"""
     try:
         chats = db.query(DirectChat).filter(
-            DirectChat.status.in_(['waiting', 'active'])
+            DirectChat.status.in_(['waiting', 'closed'])  # Remove 'active' from here
         ).order_by(DirectChat.created_at.desc()).all()
         
         return [
