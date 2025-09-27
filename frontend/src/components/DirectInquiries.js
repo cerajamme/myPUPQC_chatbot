@@ -76,15 +76,40 @@ const DirectInquiries = () => {
           activeChats.map(chat => (
             <div
               key={chat.id}
-              className={`chat-item ${selectedChat?.id === chat.id ? 'selected' : ''}`}
               onClick={() => selectChat(chat)}
+              style={{
+                padding: '12px',
+                marginBottom: '8px',
+                background: selectedChat?.id === chat.id ? '#7c2d12' : 
+                           chat.status === 'closed' ? '#f3f4f6' : 'white',
+                color: selectedChat?.id === chat.id ? 'white' : 
+                       chat.status === 'closed' ? '#6b7280' : '#374151',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                border: '1px solid #e5e7eb',
+                opacity: chat.status === 'closed' ? 0.7 : 1
+              }}
             >
-              <div className="chat-status">
-                <span className={`status-dot ${chat.status}`}></span>
-                {chat.status === 'waiting' ? 'Waiting' : 'Active'}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                <span style={{ fontSize: '12px', fontWeight: '500' }}>
+                  Session: {chat.session_id.slice(0, 8)}...
+                </span>
+                <span style={{
+                  fontSize: '10px',
+                  padding: '2px 6px',
+                  borderRadius: '10px',
+                  background: chat.status === 'waiting' ? '#fef3c7' : 
+                             chat.status === 'closed' ? '#e5e7eb' :
+                             '#d1fae5',
+                  color: chat.status === 'waiting' ? '#92400e' : 
+                         chat.status === 'closed' ? '#374151' :
+                         '#065f46'
+                }}>
+                  {chat.status}
+                </span>
               </div>
-              <div className="chat-time">
-                {new Date(chat.created_at).toLocaleTimeString()}
+              <div style={{ fontSize: '11px', opacity: 0.8 }}>
+                {new Date(chat.created_at).toLocaleString()}
               </div>
             </div>
           ))

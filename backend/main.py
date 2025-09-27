@@ -1053,7 +1053,7 @@ async def serve_widget():
             adminChatMode = true;
             adminChatSessionId = 'admin_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now();
             window.adminFirstMessageSent = false;
-            
+
             chatMessages.innerHTML = '<div style="background: #fff7ed; padding: 12px; border-radius: 8px; margin-bottom: 12px; border: 1px solid #fed7aa;"><p style="margin: 0; font-size: 14px; color: #9a3412;">🔄 Connecting you with an admin...</p><p style="margin: 8px 0 0 0; font-size: 12px; color: #a16207;">Please wait while we connect you with a live administrator. You can start typing your message.</p></div>';
             
             adminChatBtn.style.display = 'none';
@@ -1066,6 +1066,22 @@ async def serve_widget():
         });
     }
     
+    // Add this after your other event listeners in the widget
+    window.addEventListener('beforeunload', function() {
+        if (adminChatMode && adminChatSessionId) {
+            // Send a request to close the chat session
+            fetch(API_BASE_URL + '/direct-chat/close-session', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    session_id: adminChatSessionId,
+                    reason: 'user_left'
+                }),
+                keepalive: true  // Ensures request completes even if page closes
+            }).catch(() => {}); // Silent fail if network issues
+        }
+    });
+
     // Add CSS animations
     const style = document.createElement('style');
     style.textContent = '@keyframes typing { 0%, 60%, 100% { transform: translateY(0); } 30% { transform: translateY(-10px); } } #chat-toggle:hover { transform: scale(1.05); box-shadow: 0 6px 16px rgba(124, 45, 18, 0.5); } #chat-input:focus { border-color: #7c2d12; box-shadow: 0 0 0 3px rgba(124, 45, 18, 0.1); } #chat-send:hover { background: #991b1b; } @media (max-width: 480px) { #' + WIDGET_ID + ' { bottom: 10px; right: 10px; } #chat-window { width: calc(100vw - 40px); height: calc(100vh - 140px); right: -10px; bottom: 80px; } }';
@@ -1308,41 +1324,42 @@ async def get_student_analytics(
             "recent_conversations": []
         }
     
-
-@app.get("/debug/info")
-async def debug_info():
-    """Debug endpoint to check server configuration"""
-    return {
-        "cors_origins": settings.allowed_origins,
-        "environment": settings.environment,
-        "debug_mode": settings.debug,
-        "frontend_url": settings.frontend_url,
-        "widget_domain": settings.widget_domain,
-        "database_connected": health_check(),
-        "timestamp": datetime.utcnow().isoformat()
-    }
-
-@app.post("/debug/login-test")
-async def debug_login_test(request: dict):
-    """Debug login without authentication to see what's happening"""
+@app.post("/direct-chat/close-session")
+async def close_chat_session(
+    request: dict,
+    db: Session = Depends(get_db)
+):
+    """Close chat session when user leaves"""
     try:
-        email = request.get("email", "")
-        password = request.get("password", "")
+        session_id = request.get("session_id")
+        reason = request.get("reason", "user_left")
         
-        return {
-            "email_received": email,
-            "password_length": len(password),
-            "password_too_long": len(password) > 72,
-            "request_headers": dict(request) if hasattr(request, 'headers') else "No headers",
-            "timestamp": datetime.utcnow().isoformat()
-        }
+        chat = db.query(DirectChat).filter(
+            DirectChat.session_id == session_id
+        ).first()
+        
+        if chat:
+            # Update chat status to closed
+            chat.status = 'closed'
+            chat.last_activity = datetime.utcnow()
+            
+            # Add a system message for admin notification
+            close_message = DirectMessage(
+                chat_id=chat.id,
+                sender_type='system',
+                message=f'User has left the conversation (page refreshed/closed). Chat automatically closed.'
+            )
+            
+            db.add(close_message)
+            db.commit()
+            
+            logger.info(f"Chat session {session_id} closed - {reason}")
+        
+        return {"message": "Session closed"}
+        
     except Exception as e:
-        return {
-            "error": str(e),
-            "timestamp": datetime.utcnow().isoformat()
-        }
-
-
+        logger.error(f"Error closing chat session: {e}")
+        return {"error": "Failed to close session"}
 
 
 if __name__ == "__main__":
