@@ -996,10 +996,16 @@ async def serve_widget():
                 hideTyping();
                 
                 if (response.ok) {
-                    addMessage('Message sent to admin. Please wait for a response...', false);
+                    // Only show confirmation message for the first admin chat message
+                    if (!window.adminFirstMessageSent) {
+                        addMessage('Message sent to admin. Please wait for a response...', false);
+                        window.adminFirstMessageSent = true;
+                    }
                 } else {
                     addMessage('Sorry, there was an error connecting to admin support.', false);
                 }
+            
+
             } else {
                 // Send to AI system (existing code)
                 response = await fetch(API_BASE_URL + '/chat/student', {
@@ -1046,6 +1052,7 @@ async def serve_widget():
         adminChatBtn.addEventListener('click', () => {
             adminChatMode = true;
             adminChatSessionId = 'admin_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now();
+            window.adminFirstMessageSent = false;
             
             chatMessages.innerHTML = '<div style="background: #fff7ed; padding: 12px; border-radius: 8px; margin-bottom: 12px; border: 1px solid #fed7aa;"><p style="margin: 0; font-size: 14px; color: #9a3412;">🔄 Connecting you with an admin...</p><p style="margin: 8px 0 0 0; font-size: 12px; color: #a16207;">Please wait while we connect you with a live administrator. You can start typing your message.</p></div>';
             
