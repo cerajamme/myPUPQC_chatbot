@@ -14,7 +14,19 @@ const Login = ({ onLogin }) => {
     setLoading(true);
     setError('');
     
+    // Debug logging
+    console.log('Login attempt:', { 
+      email, 
+      passwordLength: password.length,
+      timestamp: new Date().toISOString()
+    });
+    
     try {
+      // Check password length first
+      if (password.length > 72) {
+        throw new Error('Password is too long (max 72 characters)');
+      }
+
       const response = await fetch('https://mypupqcchatbot-production.up.railway.app/auth/login', {
         method: 'POST',
         headers: {
@@ -26,13 +38,32 @@ const Login = ({ onLogin }) => {
         })
       });
 
+      console.log('Response status:', response.status);
+      console.log('Response headers:', Object.fromEntries(response.headers.entries()));
+
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || 'Login failed');
+        let errorMessage = 'Login failed';
+        
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.detail || errorData.message || `Server error (${response.status})`;
+          console.log('Error response data:', errorData);
+        } catch (parseError) {
+          console.log('Could not parse error response:', parseError);
+          errorMessage = `Server error (${response.status})`;
+        }
+        
+        throw new Error(errorMessage);
       }
 
       const data = await response.json();
+      console.log('Login successful:', { user: data.user?.email });
+      
       const { access_token, user } = data;
+      
+      if (!access_token) {
+        throw new Error('No access token received');
+      }
       
       localStorage.setItem('token', access_token);
       
@@ -40,8 +71,26 @@ const Login = ({ onLogin }) => {
         onLogin(user, access_token);
       }
     } catch (error) {
-      console.error('Login error:', error);
-      setError(error.message || 'Login failed. Please check your credentials.');
+      console.error('Login error details:', {
+        message: error.message,
+        type: error.constructor.name,
+        stack: error.stack
+      });
+      
+      // Provide user-friendly error messages
+      let userMessage = error.message;
+      
+      if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+        userMessage = 'Cannot connect to server. Please check your internet connection.';
+      } else if (error.message.includes('CORS')) {
+        userMessage = 'Server configuration issue. Please contact support.';
+      } else if (error.message.includes('401') || error.message.includes('Unauthorized')) {
+        userMessage = 'Invalid email or password. Please check your credentials.';
+      } else if (error.message.includes('500')) {
+        userMessage = 'Server error. Please try again later or contact support.';
+      }
+      
+      setError(userMessage);
     } finally {
       setLoading(false);
     }
@@ -49,6 +98,20 @@ const Login = ({ onLogin }) => {
 
   const togglePasswordVisibility = () => {
     setShowPassword(!showPassword);
+  };
+
+  // Debug function to test server connection
+  const testConnection = async () => {
+    try {
+      console.log('Testing server connection...');
+      const response = await fetch('https://mypupqcchatbot-production.up.railway.app/ping');
+      const data = await response.json();
+      console.log('Server ping response:', data);
+      setError('Server connection test: ' + (response.ok ? 'SUCCESS' : 'FAILED'));
+    } catch (error) {
+      console.error('Connection test failed:', error);
+      setError('Connection test failed: ' + error.message);
+    }
   };
 
   return (
@@ -126,6 +189,23 @@ const Login = ({ onLogin }) => {
               >
                 Forgot password?
               </Link>
+              
+              {/* Debug button - remove in production */}
+              <button
+                type="button"
+                onClick={testConnection}
+                style={{
+                  marginLeft: '10px',
+                  padding: '2px 8px',
+                  fontSize: '12px',
+                  background: '#f3f4f6',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '4px',
+                  cursor: 'pointer'
+                }}
+              >
+                Test Connection
+              </button>
             </div>
 
             <button

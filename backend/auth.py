@@ -91,6 +91,17 @@ def require_admin(current_user: User = Depends(get_current_active_user)) -> User
         )
     return current_user
 
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    """Verify password with length validation"""
+    try:
+        # Check password length in bytes
+        if len(plain_password.encode('utf-8')) > 72:
+            return False
+        return pwd_context.verify(plain_password, hashed_password)
+    except ValueError:
+        # Handle bcrypt errors gracefully
+        return False
+
 # Helper functions for user management
 def create_user(email: str, password: str, full_name: str, db: Session, is_superuser: bool = False) -> User:
     """Create a new user"""

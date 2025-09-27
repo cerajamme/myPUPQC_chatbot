@@ -66,7 +66,7 @@ class Settings(BaseSettings):
 
 
 
-    # CORS Settings - FIXED to properly parse comma-separated domains
+    # CORS Settings 
     @property
     def allowed_origins(self) -> List[str]:
         """Generate allowed origins dynamically, filtering out empty values"""

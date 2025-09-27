@@ -46,7 +46,7 @@ app = FastAPI(
 logger.info(f"CORS allowed origins: {settings.allowed_origins}")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.allowed_origins,
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
@@ -261,12 +261,25 @@ async def health_endpoint():
 async def login(request: LoginRequest, db: Session = Depends(get_db)):
     """Admin login endpoint"""
     try:
+        # Validate password length before any processing
+        if len(request.password.encode('utf-8')) > 72:
+            logger.warning(f"Password too long for login attempt: {request.email}")
+            raise HTTPException(status_code=400, detail="Invalid credentials")
+            
         result = login_admin(request.email, request.password, db)
         logger.info(f"Admin login successful: {request.email}")
         return result
     except HTTPException as e:
-        logger.warning(f"Login failed for {request.email}")
+        logger.warning(f"Login failed for {request.email}: {e.detail}")
         raise e
+    except ValueError as e:
+        if "password cannot be longer than 72 bytes" in str(e):
+            logger.warning(f"bcrypt password length error for {request.email}")
+            raise HTTPException(status_code=400, detail="Invalid credentials")
+        raise HTTPException(status_code=500, detail="Login system error")
+    except Exception as e:
+        logger.error(f"Login system error for {request.email}: {e}")
+        raise HTTPException(status_code=500, detail="Login system error")
 
 @app.get("/auth/me")
 async def get_current_user_info(current_user: User = Depends(get_current_active_user)):
@@ -1247,6 +1260,7 @@ async def get_user_messages(
     except Exception as e:
         logger.error(f"Error getting user messages: {e}")
         return {"new_messages": []}
+    
 # Analytics endpoints
 @app.get("/admin/student/analytics")
 async def get_student_analytics(
@@ -1287,6 +1301,42 @@ async def get_student_analytics(
             "recent_conversations": []
         }
     
+
+@app.get("/debug/info")
+async def debug_info():
+    """Debug endpoint to check server configuration"""
+    return {
+        "cors_origins": settings.allowed_origins,
+        "environment": settings.environment,
+        "debug_mode": settings.debug,
+        "frontend_url": settings.frontend_url,
+        "widget_domain": settings.widget_domain,
+        "database_connected": health_check(),
+        "timestamp": datetime.utcnow().isoformat()
+    }
+
+@app.post("/debug/login-test")
+async def debug_login_test(request: dict):
+    """Debug login without authentication to see what's happening"""
+    try:
+        email = request.get("email", "")
+        password = request.get("password", "")
+        
+        return {
+            "email_received": email,
+            "password_length": len(password),
+            "password_too_long": len(password) > 72,
+            "request_headers": dict(request) if hasattr(request, 'headers') else "No headers",
+            "timestamp": datetime.utcnow().isoformat()
+        }
+    except Exception as e:
+        return {
+            "error": str(e),
+            "timestamp": datetime.utcnow().isoformat()
+        }
+
+
+
 
 if __name__ == "__main__":
     import uvicorn
