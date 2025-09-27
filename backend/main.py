@@ -1082,6 +1082,7 @@ async def serve_widget():
         }
     });
 
+    
     // Add CSS animations
     const style = document.createElement('style');
     style.textContent = '@keyframes typing { 0%, 60%, 100% { transform: translateY(0); } 30% { transform: translateY(-10px); } } #chat-toggle:hover { transform: scale(1.05); box-shadow: 0 6px 16px rgba(124, 45, 18, 0.5); } #chat-input:focus { border-color: #7c2d12; box-shadow: 0 0 0 3px rgba(124, 45, 18, 0.1); } #chat-send:hover { background: #991b1b; } @media (max-width: 480px) { #' + WIDGET_ID + ' { bottom: 10px; right: 10px; } #chat-window { width: calc(100vw - 40px); height: calc(100vh - 140px); right: -10px; bottom: 80px; } }';
@@ -1360,7 +1361,6 @@ async def close_chat_session(
     except Exception as e:
         logger.error(f"Error closing chat session: {e}")
         return {"error": "Failed to close session"}
-
 
 if __name__ == "__main__":
     import uvicorn
