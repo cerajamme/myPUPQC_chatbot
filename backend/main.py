@@ -1129,7 +1129,7 @@ async def list_direct_chats(
     """List direct chats for admin - exclude active chats"""
     try:
         chats = db.query(DirectChat).filter(
-            DirectChat.status.in_(['waiting', 'closed'])  # Remove 'active' from here
+            DirectChat.status.in_(['waiting', 'active'])
         ).order_by(DirectChat.created_at.desc()).all()
         
         return [
@@ -1284,6 +1284,51 @@ async def get_user_messages(
     except Exception as e:
         logger.error(f"Error getting user messages: {e}")
         return {"new_messages": []}
+    
+@app.delete("/admin/clear-closed-chats")
+async def clear_closed_chats(
+    current_user: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """Delete all closed chats and their messages"""
+    try:
+        # Delete messages first (foreign key constraint)
+        closed_chat_ids = db.query(DirectChat.id).filter(DirectChat.status == 'closed').subquery()
+        db.query(DirectMessage).filter(DirectMessage.chat_id.in_(closed_chat_ids)).delete(synchronize_session=False)
+        
+        # Then delete closed chats
+        deleted_count = db.query(DirectChat).filter(DirectChat.status == 'closed').delete()
+        db.commit()
+        
+        logger.info(f"Cleared {deleted_count} closed chats")
+        return {"message": f"Cleared {deleted_count} closed chats"}
+    except Exception as e:
+        logger.error(f"Error clearing chats: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Failed to clear chats")
+    
+@app.delete("/admin/direct-chats/{chat_id}")
+async def delete_direct_chat(
+    chat_id: int,
+    current_user: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """Delete a specific chat and its messages"""
+    try:
+        # Delete messages first (foreign key constraint)
+        db.query(DirectMessage).filter(DirectMessage.chat_id == chat_id).delete()
+        # Then delete the chat
+        deleted = db.query(DirectChat).filter(DirectChat.id == chat_id).delete()
+        db.commit()
+        
+        if deleted:
+            return {"message": "Chat deleted"}
+        raise HTTPException(status_code=404, detail="Chat not found")
+    except Exception as e:
+        logger.error(f"Error deleting chat: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Failed to delete chat")
+
     
 
 @app.get("/admin/debug/chunks")
