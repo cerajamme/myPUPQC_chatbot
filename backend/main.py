@@ -1126,10 +1126,10 @@ async def list_direct_chats(
     current_user: User = Depends(require_admin),
     db: Session = Depends(get_db)
 ):
-    """List direct chats for admin - exclude active chats"""
+    """List direct chats for admin"""
     try:
         chats = db.query(DirectChat).filter(
-            DirectChat.status.in_(['waiting', 'active'])
+            DirectChat.status.in_(['waiting', 'active'])  # CHANGED: show active chats
         ).order_by(DirectChat.created_at.desc()).all()
         
         return [
@@ -1138,37 +1138,13 @@ async def list_direct_chats(
                 session_id=chat.session_id,
                 status=chat.status,
                 created_at=chat.created_at.isoformat(),
-                last_activity=chat.last_activity.isoformat()
+                last_activity=chat.last_activity.isoformat(),
+                student_number=getattr(chat, 'student_number', None)  # ADD THIS
             )
             for chat in chats
         ]
     except Exception as e:
         logger.error(f"Error listing direct chats: {e}")
-        return []
-
-@app.get("/admin/direct-chats/{chat_id}/messages", response_model=List[DirectMessageResponse])
-async def get_chat_messages(
-    chat_id: int,
-    current_user: User = Depends(require_admin),
-    db: Session = Depends(get_db)
-):
-    """Get messages for a specific chat"""
-    try:
-        messages = db.query(DirectMessage).filter(
-            DirectMessage.chat_id == chat_id
-        ).order_by(DirectMessage.sent_at.asc()).all()
-        
-        return [
-            DirectMessageResponse(
-                id=msg.id,
-                sender_type=msg.sender_type,
-                message=msg.message,
-                sent_at=msg.sent_at.isoformat()
-            )
-            for msg in messages
-        ]
-    except Exception as e:
-        logger.error(f"Error getting chat messages: {e}")
         return []
 
 @app.post("/admin/direct-chats/{chat_id}/messages")
@@ -1220,10 +1196,14 @@ async def send_user_message(
         ).first()
         
         if not chat:
-            # Create new chat session
+            # Get the next student number
+            max_student_num = db.query(DirectChat).count() + 1
+            
+            # Create new chat session with student number
             chat = DirectChat(
                 session_id=request.session_id,
-                status='waiting'
+                status='waiting',
+                student_number=max_student_num  # NEW FIELD
             )
             db.add(chat)
             db.flush()
@@ -1245,8 +1225,7 @@ async def send_user_message(
         
     except Exception as e:
         logger.error(f"Error sending user message: {e}")
-        raise HTTPException(status_code=500, detail="Failed to send message")
-    
+        raise HTTPException(status_code=500, detail="Failed to send message")  
 @app.post("/direct-chat/get-messages")
 async def get_user_messages(
     request: GetMessagesRequest,
