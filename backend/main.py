@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from fastapi.responses import FileResponse
 from pathlib import Path
-from models import User, Chatbot, Document as DocModel, Conversation, ChatbotType, ChatOption, PasswordResetToken, DirectChat, DirectMessage
+from models import User, Chatbot, Document as DocModel, Conversation, ChatbotType, ChatOption, PasswordResetToken, DirectChat, DirectMessage, DocumentChunk
 # Local imports
 from config import settings, validate_settings, get_upload_path, is_file_allowed, is_file_size_valid
 from database import get_db, create_tables, create_initial_data, health_check, get_chatbot_by_type
@@ -1327,6 +1327,32 @@ async def get_student_analytics(
     
 @app.get("/admin/debug/chunks")
 async def debug_chunks(
+    search: Optional[str] = None,
+    limit: int = 10,
+    current_user: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """View actual chunk content from database"""
+    query = db.query(DocumentChunk)
+    
+    if search:
+        query = query.filter(DocumentChunk.text_content.ilike(f'%{search}%'))
+    
+    chunks = query.limit(limit).all()
+    
+    return {
+        "total_chunks": db.query(DocumentChunk).count(),
+        "search_term": search,
+        "showing": len(chunks),
+        "chunks": [
+            {
+                "id": c.id,
+                "page": c.page_number,
+                "text_preview": c.text_content[:500]
+            }
+            for c in chunks
+        ]
+    }
     search: Optional[str] = None,
     limit: int = 10,
     current_user: User = Depends(require_admin),
