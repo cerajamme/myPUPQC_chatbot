@@ -1,325 +1,316 @@
-import React, { useState, useEffect } from 'react';
-import { admin } from '../api';
-import './DashboardStyles.css';
+import React, { useState, useEffect, useRef } from 'react';
+import './DirectInquiriesStyles.css';
 
 const DirectInquiries = () => {
-  const [activeChats, setActiveChats] = useState([]);
-  const [selectedChat, setSelectedChat] = useState(null);
+  const [inquiries, setInquiries] = useState([]);
+  const [selectedInquiry, setSelectedInquiry] = useState(null);
   const [messages, setMessages] = useState([]);
-  const [newMessage, setNewMessage] = useState('');
-  const [loading, setLoading] = useState(true);
+  const [replyText, setReplyText] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [sending, setSending] = useState(false);
+  const messagesEndRef = useRef(null);
 
-  // Load active chats on component mount
+  // Load inquiries on mount
   useEffect(() => {
-    loadActiveChats();
-    const interval = setInterval(loadActiveChats, 3000);
+    loadInquiries();
+    // Poll for new inquiries every 5 seconds
+    const interval = setInterval(loadInquiries, 5000);
     return () => clearInterval(interval);
   }, []);
 
-  // Load messages when chat is selected
+  // Auto-scroll messages
   useEffect(() => {
-    if (selectedChat) {
-      loadChatMessages(selectedChat.id);
-      const interval = setInterval(() => loadChatMessages(selectedChat.id), 2000);
-      return () => clearInterval(interval);
-    }
-  }, [selectedChat]);
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
 
-  const loadActiveChats = async () => {
+  // Restore selected inquiry from localStorage
+  useEffect(() => {
+    const savedInquiryId = localStorage.getItem('selectedInquiryId');
+    if (savedInquiryId && inquiries.length > 0) {
+      const inquiry = inquiries.find(i => i.id === parseInt(savedInquiryId));
+      if (inquiry) {
+        handleSelectInquiry(inquiry);
+      }
+    }
+  }, [inquiries]);
+
+  const loadInquiries = async () => {
     try {
-      const response = await admin.getDirectChats();
-      const chats = response.data || [];
+      // TODO: Replace with actual API call
+      // const response = await fetch('/admin/direct-chats');
+      // const data = await response.json();
       
-      // Filter out active chats completely
-      const filteredChats = chats.filter(chat => {
-        // Remove active chats from display
-        if (chat.status === 'active') {
-          return false;
+      // Mock data for now
+      const mockData = [
+        {
+          id: 1,
+          userSessionId: 'user-123',
+          status: 'waiting',
+          lastMessage: 'I need help with enrollment',
+          lastActivity: new Date().toISOString(),
+          unreadCount: 2
+        },
+        {
+          id: 2,
+          userSessionId: 'user-456',
+          status: 'active',
+          lastMessage: 'Thank you for your help!',
+          lastActivity: new Date(Date.now() - 300000).toISOString(),
+          unreadCount: 0
         }
-        
-        // Keep waiting chats
-        if (chat.status === 'waiting') {
-          return true;
-        }
-        
-        // Keep recent closed chats for 5 minutes
-        if (chat.status === 'closed') {
-          const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
-          const lastActivity = new Date(chat.last_activity);
-          return lastActivity > fiveMinutesAgo;
-        }
-        
-        return false;
-      });
-      
-      setActiveChats(filteredChats);
-      setLoading(false);
+      ];
+      setInquiries(mockData);
     } catch (error) {
-      console.error('Error loading chats:', error);
-      setLoading(false);
+      console.error('Failed to load inquiries:', error);
     }
   };
 
-  const loadChatMessages = async (chatId) => {
-    try {
-      const response = await admin.getChatMessages(chatId);
-      setMessages(response.data || []);
-    } catch (error) {
-      console.error('Error loading messages:', error);
-    }
-  };
-
-  const sendMessage = async () => {
-    if (!newMessage.trim() || !selectedChat) return;
-
-    try {
-      await admin.sendAdminMessage(selectedChat.id, newMessage);
-      setNewMessage('');
-      loadChatMessages(selectedChat.id);
-    } catch (error) {
-      console.error('Error sending message:', error);
-    }
-  };
-
-  const selectChat = (chat) => {
-    setSelectedChat(chat);
-  };
-
-  const clearAllClosedChats = async () => {
-    const openChats = activeChats.filter(chat => chat.status !== 'closed');
-    setActiveChats(openChats);
+  const handleSelectInquiry = async (inquiry) => {
+    setSelectedInquiry(inquiry);
+    localStorage.setItem('selectedInquiryId', inquiry.id);
+    setLoading(true);
     
-    if (selectedChat && selectedChat.status === 'closed') {
-      setSelectedChat(null);
-      setMessages([]);
+    try {
+      // TODO: Replace with actual API call
+      // const response = await fetch(`/admin/direct-chats/${inquiry.id}/messages`);
+      // const data = await response.json();
+      
+      // Mock messages
+      const mockMessages = [
+        {
+          id: 1,
+          senderType: 'user',
+          message: 'I need help with enrollment',
+          sentAt: new Date(Date.now() - 600000).toISOString()
+        },
+        {
+          id: 2,
+          senderType: 'user',
+          message: 'What are the requirements?',
+          sentAt: new Date(Date.now() - 300000).toISOString()
+        }
+      ];
+      setMessages(mockMessages);
+    } catch (error) {
+      console.error('Failed to load messages:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
-  if (loading) {
-    return <div className="loading">Loading direct inquiries...</div>;
-  }
+  const handleSendReply = async () => {
+    if (!replyText.trim() || !selectedInquiry) return;
+    
+    setSending(true);
+    
+    try {
+      // TODO: Replace with actual API call
+      // await fetch(`/admin/direct-chats/${selectedInquiry.id}/messages`, {
+      //   method: 'POST',
+      //   headers: { 'Content-Type': 'application/json' },
+      //   body: JSON.stringify({ message: replyText, senderType: 'admin' })
+      // });
+      
+      // Add message optimistically
+      const newMessage = {
+        id: Date.now(),
+        senderType: 'admin',
+        message: replyText,
+        sentAt: new Date().toISOString()
+      };
+      setMessages([...messages, newMessage]);
+      setReplyText('');
+    } catch (error) {
+      console.error('Failed to send message:', error);
+    } finally {
+      setSending(false);
+    }
+  };
 
-  const closedChats = activeChats.filter(chat => chat.status === 'closed');
+  const handleCloseInquiry = async () => {
+    if (!selectedInquiry) return;
+    
+    try {
+      // TODO: Replace with actual API call
+      // await fetch(`/admin/direct-chats/${selectedInquiry.id}/status`, {
+      //   method: 'PUT',
+      //   headers: { 'Content-Type': 'application/json' },
+      //   body: JSON.stringify({ status: 'closed' })
+      // });
+      
+      setSelectedInquiry(null);
+      localStorage.removeItem('selectedInquiryId');
+      loadInquiries();
+    } catch (error) {
+      console.error('Failed to close inquiry:', error);
+    }
+  };
+
+  const formatTime = (timestamp) => {
+    const date = new Date(timestamp);
+    return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+  };
+
+  const getStatusColor = (status) => {
+    switch (status) {
+      case 'waiting': return '#f59e0b';
+      case 'active': return '#10b981';
+      case 'closed': return '#6b7280';
+      default: return '#6b7280';
+    }
+  };
 
   return (
-    <div style={{ display: 'flex', height: '600px', border: '1px solid #e5e7eb', borderRadius: '8px', overflow: 'hidden' }}>
-      
-      {/* LEFT SIDE - Chat Interface */}
-      <div style={{ 
-        flex: '2', 
-        display: 'flex', 
-        flexDirection: 'column',
-        background: 'white',
-        borderRight: '1px solid #e5e7eb'
-      }}>
-        {selectedChat ? (
-          <>
-            {/* Chat Header */}
-            <div style={{ 
-              padding: '16px', 
-              borderBottom: '1px solid #e5e7eb', 
-              background: '#f9fafb'
-            }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <h4 style={{ margin: 0, fontSize: '16px', color: '#111827' }}>
-                  Chat: {selectedChat.session_id.slice(0, 12)}...
-                </h4>
-                <span style={{
-                  fontSize: '12px',
-                  padding: '4px 8px',
-                  borderRadius: '12px',
-                  background: selectedChat.status === 'waiting' ? '#fef3c7' : 
-                             selectedChat.status === 'closed' ? '#e5e7eb' : '#d1fae5',
-                  color: selectedChat.status === 'waiting' ? '#92400e' : 
-                         selectedChat.status === 'closed' ? '#374151' : '#065f46'
-                }}>
-                  {selectedChat.status}
-                </span>
-              </div>
-            </div>
-
-            {/* Messages */}
-            <div style={{ 
-              flex: 1, 
-              padding: '16px', 
-              overflowY: 'auto', 
-              background: '#f9fafb'
-            }}>
-              {messages.map(message => (
-                <div
-                  key={message.id}
-                  style={{
-                    marginBottom: '12px',
-                    display: 'flex',
-                    justifyContent: message.sender_type === 'admin' ? 'flex-end' : 'flex-start'
-                  }}
-                >
-                  <div style={{
-                    maxWidth: '70%',
-                    padding: '8px 12px',
-                    borderRadius: '12px',
-                    background: message.sender_type === 'admin' ? '#7c2d12' : 
-                               message.sender_type === 'system' ? '#f3f4f6' : 'white',
-                    color: message.sender_type === 'admin' ? 'white' : 
-                           message.sender_type === 'system' ? '#6b7280' : '#374151',
-                    fontSize: '14px',
-                    boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
-                    border: message.sender_type === 'system' ? '1px dashed #d1d5db' : 'none'
-                  }}>
-                    <div>{message.message}</div>
-                    <div style={{
-                      fontSize: '11px',
-                      opacity: 0.8,
-                      marginTop: '4px'
-                    }}>
-                      {new Date(message.sent_at).toLocaleTimeString()}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Message Input */}
-            <div style={{ 
-              padding: '16px', 
-              borderTop: '1px solid #e5e7eb', 
-              background: 'white'
-            }}>
-              {selectedChat.status === 'closed' ? (
-                <div style={{ textAlign: 'center', color: '#6b7280', fontSize: '14px' }}>
-                  This conversation has been closed
-                </div>
-              ) : (
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  <input
-                    type="text"
-                    value={newMessage}
-                    onChange={(e) => setNewMessage(e.target.value)}
-                    placeholder="Type your response..."
-                    onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
-                    style={{
-                      flex: 1,
-                      padding: '8px 12px',
-                      border: '1px solid #d1d5db',
-                      borderRadius: '20px',
-                      outline: 'none',
-                      fontSize: '14px'
-                    }}
-                  />
-                  <button
-                    onClick={sendMessage}
-                    style={{
-                      padding: '8px 16px',
-                      background: '#7c2d12',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: '20px',
-                      cursor: 'pointer',
-                      fontSize: '14px'
-                    }}
-                  >
-                    Send
-                  </button>
-                </div>
-              )}
-            </div>
-          </>
-        ) : (
-          <div style={{
-            flex: 1,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: '#6b7280'
-          }}>
-            <p>Select a chat to start responding</p>
-          </div>
-        )}
-      </div>
-
-      {/* RIGHT SIDE - Chat List */}
-      <div style={{ 
-        flex: '1', 
-        display: 'flex', 
-        flexDirection: 'column',
-        background: '#f9fafb'
-      }}>
+    <div className="direct-inquiries-wrapper">
+      <div className="direct-inquiries-container">
         {/* Header */}
-        <div style={{ 
-          padding: '16px', 
-          borderBottom: '1px solid #e5e7eb',
-          background: 'white'
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <h3 style={{ margin: 0, fontSize: '16px', color: '#111827' }}>
-              Inquiries ({activeChats.length})
-            </h3>
-            {closedChats.length > 0 && (
-              <button
-                onClick={clearAllClosedChats}
-                style={{
-                  padding: '4px 8px',
-                  background: '#ef4444',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '4px',
-                  fontSize: '11px',
-                  cursor: 'pointer'
-                }}
-              >
-                Clear ({closedChats.length})
-              </button>
-            )}
-          </div>
+        <div className="inquiries-header">
+          <h2 className="inquiries-title">
+            <svg className="inquiries-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+            </svg>
+            Direct Inquiries
+          </h2>
         </div>
 
-        {/* Chat List */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '8px' }}>
-          {activeChats.length === 0 ? (
-            <p style={{ textAlign: 'center', color: '#6b7280', fontSize: '14px', marginTop: '20px' }}>
-              No active inquiries
-            </p>
-          ) : (
-            activeChats.map(chat => (
-              <div
-                key={chat.id}
-                onClick={() => selectChat(chat)}
-                style={{
-                  padding: '12px',
-                  marginBottom: '6px',
-                  background: selectedChat?.id === chat.id ? '#7c2d12' : 
-                             chat.status === 'closed' ? '#f3f4f6' : 'white',
-                  color: selectedChat?.id === chat.id ? 'white' : 
-                         chat.status === 'closed' ? '#6b7280' : '#374151',
-                  borderRadius: '6px',
-                  cursor: 'pointer',
-                  border: '1px solid #e5e7eb',
-                  opacity: chat.status === 'closed' ? 0.7 : 1,
-                  fontSize: '13px'
-                }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                  <span style={{ fontWeight: '500' }}>
-                    {chat.session_id.slice(0, 8)}...
-                  </span>
-                  <span style={{
-                    fontSize: '10px',
-                    padding: '2px 6px',
-                    borderRadius: '10px',
-                    background: chat.status === 'waiting' ? '#fef3c7' : 
-                               chat.status === 'closed' ? '#e5e7eb' : '#d1fae5',
-                    color: chat.status === 'waiting' ? '#92400e' : 
-                           chat.status === 'closed' ? '#374151' : '#065f46'
-                  }}>
-                    {chat.status}
-                  </span>
+        {/* Main Content */}
+        <div className="inquiries-content-wrapper">
+          {/* Inquiries List */}
+          <div className="inquiries-list-section">
+            <div className="inquiries-list-header">
+              <h3>Active Conversations ({inquiries.length})</h3>
+              <button className="refresh-button" onClick={loadInquiries}>
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="inquiries-list">
+              {inquiries.length === 0 ? (
+                <div className="empty-state">
+                  <p>No active inquiries</p>
                 </div>
-                <div style={{ fontSize: '11px', opacity: 0.8 }}>
-                  {new Date(chat.created_at).toLocaleString()}
-                </div>
+              ) : (
+                inquiries.map(inquiry => (
+                  <div
+                    key={inquiry.id}
+                    className={`inquiry-item ${selectedInquiry?.id === inquiry.id ? 'active' : ''}`}
+                    onClick={() => handleSelectInquiry(inquiry)}
+                  >
+                    <div className="inquiry-item-header">
+                      <div className="inquiry-user">
+                        <div className="user-avatar">
+                          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                          </svg>
+                        </div>
+                        <span className="user-id">{inquiry.userSessionId}</span>
+                      </div>
+                      <span 
+                        className="inquiry-status"
+                        style={{ backgroundColor: getStatusColor(inquiry.status) }}
+                      >
+                        {inquiry.status}
+                      </span>
+                    </div>
+                    <p className="inquiry-preview">{inquiry.lastMessage}</p>
+                    <div className="inquiry-meta">
+                      <span className="inquiry-time">{formatTime(inquiry.lastActivity)}</span>
+                      {inquiry.unreadCount > 0 && (
+                        <span className="unread-badge">{inquiry.unreadCount}</span>
+                      )}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* Chat Section */}
+          <div className="inquiry-chat-section">
+            {!selectedInquiry ? (
+              <div className="no-selection">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                </svg>
+                <p>Select a conversation to view messages</p>
               </div>
-            ))
-          )}
+            ) : (
+              <>
+                {/* Chat Header */}
+                <div className="chat-header-bar">
+                  <div className="chat-user-info">
+                    <h3>{selectedInquiry.userSessionId}</h3>
+                    <span className="chat-status">{selectedInquiry.status}</span>
+                  </div>
+                  <button className="close-inquiry-button" onClick={handleCloseInquiry}>
+                    Close Inquiry
+                  </button>
+                </div>
+
+                {/* Messages */}
+                <div className="inquiry-messages">
+                  {loading ? (
+                    <div className="loading-messages">
+                      <div className="loading-spinner"></div>
+                      <p>Loading messages...</p>
+                    </div>
+                  ) : (
+                    <>
+                      {messages.map(msg => (
+                        <div key={msg.id} className={`message-container ${msg.senderType}`}>
+                          <div className={`message-bubble ${msg.senderType}`}>
+                            <p className="message-content">{msg.message}</p>
+                            <span className="message-time">{formatTime(msg.sentAt)}</span>
+                          </div>
+                        </div>
+                      ))}
+                      <div ref={messagesEndRef} />
+                    </>
+                  )}
+                </div>
+
+                {/* Reply Input */}
+                <div className="reply-input-section">
+                  <div className="reply-input-container">
+                    <textarea
+                      className="reply-textarea"
+                      placeholder="Type your reply..."
+                      value={replyText}
+                      onChange={(e) => setReplyText(e.target.value)}
+                      onKeyPress={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                          e.preventDefault();
+                          handleSendReply();
+                        }
+                      }}
+                      rows={3}
+                    />
+                    <button
+                      className="send-reply-button"
+                      onClick={handleSendReply}
+                      disabled={!replyText.trim() || sending}
+                    >
+                      {sending ? (
+                        <>
+                          <div className="loading-spinner small"></div>
+                          Sending...
+                        </>
+                      ) : (
+                        <>
+                          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                          </svg>
+                          Send Reply
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </div>
     </div>
