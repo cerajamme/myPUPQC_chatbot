@@ -1285,6 +1285,37 @@ async def get_user_messages(
         logger.error(f"Error getting user messages: {e}")
         return {"new_messages": []}
     
+
+@app.get("/admin/debug/chunks")
+async def debug_chunks(
+    search: Optional[str] = None,
+    limit: int = 10,
+    current_user: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """View actual chunk content from database"""
+    query = db.query(DocumentChunk)
+    
+    if search:
+        query = query.filter(DocumentChunk.text_content.ilike(f'%{search}%'))
+    
+    chunks = query.limit(limit).all()
+    
+    return {
+        "total_chunks": db.query(DocumentChunk).count(),
+        "search_term": search,
+        "showing": len(chunks),
+        "chunks": [
+            {
+                "id": c.id,
+                "page": c.page_number,
+                "text_preview": c.text_content[:500]
+            }
+            for c in chunks
+        ]
+    }
+
+
 # Analytics endpoints
 @app.get("/admin/student/analytics")
 async def get_student_analytics(
@@ -1325,62 +1356,6 @@ async def get_student_analytics(
             "recent_conversations": []
         }
     
-@app.get("/admin/debug/chunks")
-async def debug_chunks(
-    search: Optional[str] = None,
-    limit: int = 10,
-    current_user: User = Depends(require_admin),
-    db: Session = Depends(get_db)
-):
-    """View actual chunk content from database"""
-    query = db.query(DocumentChunk)
-    
-    if search:
-        query = query.filter(DocumentChunk.text_content.ilike(f'%{search}%'))
-    
-    chunks = query.limit(limit).all()
-    
-    return {
-        "total_chunks": db.query(DocumentChunk).count(),
-        "search_term": search,
-        "showing": len(chunks),
-        "chunks": [
-            {
-                "id": c.id,
-                "page": c.page_number,
-                "text_preview": c.text_content[:500]
-            }
-            for c in chunks
-        ]
-    }
-    search: Optional[str] = None,
-    limit: int = 10,
-    current_user: User = Depends(require_admin),
-    db: Session = Depends(get_db)
-):
-    """View actual chunk content from database"""
-    query = db.query(DocumentChunk)
-    
-    if search:
-        query = query.filter(DocumentChunk.text_content.ilike(f'%{search}%'))
-    
-    chunks = query.limit(limit).all()
-    
-    return {
-        "total_chunks": db.query(DocumentChunk).count(),
-        "search_term": search,
-        "showing": len(chunks),
-        "chunks": [
-            {
-                "id": c.id,
-                "page": c.page_number,
-                "text_preview": c.text_content[:500],
-                "full_text": c.text_content
-            }
-            for c in chunks
-        ]
-    }
-
 @app.post("/direct-chat/close-session")
 async def close_chat_session(
     request: dict,
