@@ -895,7 +895,8 @@ async def serve_widget():
         const messageContent = document.createElement('div');
         messageContent.style.cssText = 'max-width: 80%; padding: 10px 12px; border-radius: 12px; background: ' + (isUser ? '#7c2d12' : 'white') + '; color: ' + (isUser ? 'white' : '#374151') + '; font-size: 14px; line-height: 1.4; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);';
         
-        messageContent.innerHTML = message.replace(/\\n/g, '<br>');
+        messageContent.style.whiteSpace = 'pre-wrap';
+        messageContent.textContent = message;
         messageDiv.appendChild(messageContent);
         chatMessages.appendChild(messageDiv);
         chatMessages.scrollTop = chatMessages.scrollHeight;
