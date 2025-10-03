@@ -240,25 +240,25 @@ class SimplifiedRAGSystem:
             context = self._build_context(relevant_chunks)
             
             # Generate response using Gemini with natural instructions
-            prompt = f"""
-You are a friendly PUPQC student support assistant. Answer the question based on the provided context from official student documents.
+            prompt = f"""You are a friendly PUPQC student support assistant. Answer the question based on the provided context from official student documents.
 
-Guidelines:
-- Write in a natural, conversational tone like a helpful student assistant
-- NEVER mention page numbers, document names, or technical references
-- Use bullet points (•) for lists, not asterisks (*)
-- If information seems incomplete, acknowledge you're still learning
-- Keep answers clear, friendly, and helpful for students
-- Focus on being genuinely helpful rather than robotic
+        Guidelines:
+        - Write in a natural, conversational tone like a helpful student assistant
+        - For lists, put EACH item on a NEW LINE starting with a bullet (•)
+        - Example format:
+        Here are the courses:
+        • Bachelor of Science in Information Technology
+        • Bachelor of Business Administration
+        • Master in Public Administration
+        - NEVER mention page numbers, document names, or technical references
+        - Keep answers clear, friendly, and helpful for students
 
-Context:
-{context}
+        Context:
+        {context}
 
-Question: {question}
+        Question: {question}
 
-Please provide a helpful, natural answer without any technical references:
-"""
-            
+        Answer (use line breaks for list items):"""
             response = self.model.generate_content(prompt)
             answer = response.text
             
@@ -302,16 +302,22 @@ Please provide a helpful, natural answer without any technical references:
     
     def _clean_response(self, answer: str) -> str:
         """Clean response to remove technical artifacts and improve formatting"""
-        # Remove technical references that Gemini might still include
+        # Remove technical references
         answer = re.sub(r'page\s+\d+(?:[-–]\d+)?', '', answer, flags=re.IGNORECASE)
         answer = re.sub(r'pages?\s+\d+(?:,\s*\d+)*(?:,?\s*and\s*\d+)?', '', answer, flags=re.IGNORECASE)
         answer = re.sub(r'document\s+\d+', '', answer, flags=re.IGNORECASE)
         answer = re.sub(r'section\s+\d+(?:\.\d+)*', '', answer, flags=re.IGNORECASE)
-        answer = re.sub(r'\*\s*', '• ', answer)  # Convert asterisks to bullets
-        answer = re.sub(r'\s+', ' ', answer).strip()  # Clean extra whitespace
         
-        return answer
-    
+        # Fix bullet formatting
+        answer = re.sub(r'\*+\s*', '• ', answer)  # Convert asterisks to bullets
+        answer = re.sub(r'•+\s*', '• ', answer)  # Fix duplicate bullets
+        
+        # Clean whitespace but PRESERVE newlines
+        answer = re.sub(r' +', ' ', answer)  # Multiple spaces to single space
+        answer = re.sub(r'\n\n\n+', '\n\n', answer)  # Max 2 consecutive newlines
+        
+        return answer.strip()
+
     def _search_documents(self, question: str, limit: int = 5) -> List[Dict]:
         """Simple keyword-based document search using PostgreSQL full-text search"""
         db = SessionLocal()
