@@ -299,28 +299,29 @@ class SimplifiedRAGSystem:
                 "session_id": session_id,
                 "error": str(e)
             }
-    
+
     def _clean_response(self, answer: str) -> str:
         """Clean response to remove technical artifacts and improve formatting"""
+        logger.info(f"BEFORE CLEANING: {repr(answer)}")  # Shows exact format with \n visible
+        
         # Remove technical references
         answer = re.sub(r'page\s+\d+(?:[-–]\d+)?', '', answer, flags=re.IGNORECASE)
         answer = re.sub(r'pages?\s+\d+(?:,\s*\d+)*(?:,?\s*and\s*\d+)?', '', answer, flags=re.IGNORECASE)
         answer = re.sub(r'document\s+\d+', '', answer, flags=re.IGNORECASE)
         answer = re.sub(r'section\s+\d+(?:\.\d+)*', '', answer, flags=re.IGNORECASE)
         
-        # Convert asterisks to bullets first
+        # Convert asterisks to bullets
         answer = re.sub(r'\*+', '•', answer)
         
-        # CRITICAL: Add newline before each bullet that doesn't already have one
-        answer = re.sub(r'([^\n])(\s*•)', r'\1\n\2', answer)
+        # Add newline before each bullet
+        answer = re.sub(r'([^\n])\s*•', r'\1\n•', answer)
         
-        # Clean up duplicate bullets
+        # Clean up duplicate bullets and whitespace
         answer = re.sub(r'•+', '•', answer)
+        answer = re.sub(r' +', ' ', answer)
+        answer = re.sub(r'\n\n\n+', '\n\n', answer)
         
-        # Clean whitespace but preserve newlines
-        answer = re.sub(r' +', ' ', answer)  # Multiple spaces to single
-        answer = re.sub(r'\n\n\n+', '\n\n', answer)  # Max 2 newlines
-        answer = re.sub(r'\n ', '\n', answer)  # Remove space after newline
+        logger.info(f"AFTER CLEANING: {repr(answer)}")  # Shows if \n was added
         
         return answer.strip()
 
