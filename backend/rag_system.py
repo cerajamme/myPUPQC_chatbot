@@ -24,7 +24,7 @@ class SimplifiedRAGSystem:
         """Initialize Gemini API client"""
         try:
             genai.configure(api_key=settings.gemini_api_key)
-            self.model = genai.GenerativeModel('gemini-1.5-flash')
+            self.model = genai.GenerativeModel('gemini-pro')
             logger.info("✅ Gemini API initialized")
         except Exception as e:
             logger.error(f"❌ Error initializing Gemini: {e}")
