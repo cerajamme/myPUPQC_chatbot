@@ -1380,6 +1380,7 @@ async def get_student_analytics(
             "recent_conversations": []
         }
     
+
 @app.post("/direct-chat/close-session")
 async def close_chat_session(
     request: dict,
@@ -1416,6 +1417,29 @@ async def close_chat_session(
     except Exception as e:
         logger.error(f"Error closing chat session: {e}")
         return {"error": "Failed to close session"}
+
+@app.get("/admin/test-gemini")
+async def test_gemini_api(current_user: User = Depends(require_admin)):
+    """Test Gemini API connection"""
+    try:
+        import google.generativeai as genai
+        genai.configure(api_key=settings.gemini_api_key)
+        model = genai.GenerativeModel('gemini-1.5-flash')
+        
+        response = model.generate_content("Say hello")
+        
+        return {
+            "status": "success",
+            "gemini_response": response.text,
+            "api_key_present": bool(settings.gemini_api_key),
+            "api_key_length": len(settings.gemini_api_key) if settings.gemini_api_key else 0
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "error": str(e),
+            "error_type": type(e).__name__
+        }
 
 if __name__ == "__main__":
     import uvicorn
