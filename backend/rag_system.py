@@ -308,13 +308,19 @@ class SimplifiedRAGSystem:
         answer = re.sub(r'document\s+\d+', '', answer, flags=re.IGNORECASE)
         answer = re.sub(r'section\s+\d+(?:\.\d+)*', '', answer, flags=re.IGNORECASE)
         
-        # Fix bullet formatting
-        answer = re.sub(r'\*+\s*', '• ', answer)  # Convert asterisks to bullets
-        answer = re.sub(r'•+\s*', '• ', answer)  # Fix duplicate bullets
+        # Convert asterisks to bullets first
+        answer = re.sub(r'\*+', '•', answer)
         
-        # Clean whitespace but PRESERVE newlines
-        answer = re.sub(r' +', ' ', answer)  # Multiple spaces to single space
-        answer = re.sub(r'\n\n\n+', '\n\n', answer)  # Max 2 consecutive newlines
+        # CRITICAL: Add newline before each bullet that doesn't already have one
+        answer = re.sub(r'([^\n])(\s*•)', r'\1\n\2', answer)
+        
+        # Clean up duplicate bullets
+        answer = re.sub(r'•+', '•', answer)
+        
+        # Clean whitespace but preserve newlines
+        answer = re.sub(r' +', ' ', answer)  # Multiple spaces to single
+        answer = re.sub(r'\n\n\n+', '\n\n', answer)  # Max 2 newlines
+        answer = re.sub(r'\n ', '\n', answer)  # Remove space after newline
         
         return answer.strip()
 
