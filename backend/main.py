@@ -1196,14 +1196,10 @@ async def send_user_message(
         ).first()
         
         if not chat:
-            # Get the next student number
-            max_student_num = db.query(DirectChat).count() + 1
-            
-            # Create new chat session with student number
+            # Create new chat session
             chat = DirectChat(
                 session_id=request.session_id,
-                status='waiting',
-                student_number=max_student_num  # NEW FIELD
+                status='waiting'
             )
             db.add(chat)
             db.flush()
@@ -1225,7 +1221,8 @@ async def send_user_message(
         
     except Exception as e:
         logger.error(f"Error sending user message: {e}")
-        raise HTTPException(status_code=500, detail="Failed to send message")  
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Failed to send message")
 @app.post("/direct-chat/get-messages")
 async def get_user_messages(
     request: GetMessagesRequest,
