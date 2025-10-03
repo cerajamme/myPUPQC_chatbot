@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-// import { admin } from '../api';
 import './DirectInquiriesStyles.css';
 
 const DirectInquiries = () => {
@@ -23,9 +22,10 @@ const DirectInquiries = () => {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await response.json();
-      setChats(data);
+      setChats(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error('Error loading chats:', error);
+      setChats([]);
     }
   };
 
@@ -38,9 +38,10 @@ const DirectInquiries = () => {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await response.json();
-      setMessages(data);
+      setMessages(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error('Error loading messages:', error);
+      setMessages([]);
     }
     setLoading(false);
   };
@@ -80,13 +81,8 @@ const DirectInquiries = () => {
   };
 
   const formatSessionId = (sessionId) => {
-    // Extract just the number from admin_xxxxx_timestamp format
-    const match = sessionId.match(/admin_.*?_(\d+)$/);
-    if (match) {
-      const count = chats.findIndex(c => c.session_id === sessionId) + 1;
-      return `Student ${count}`;
-    }
-    return sessionId;
+    const count = chats.findIndex(c => c.session_id === sessionId) + 1;
+    return `Student ${count}`;
   };
 
   const deleteChat = async (chatId) => {
