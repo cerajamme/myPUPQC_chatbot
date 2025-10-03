@@ -1441,6 +1441,34 @@ async def test_gemini_api(current_user: User = Depends(require_admin)):
             "error_type": type(e).__name__
         }
 
+@app.get("/admin/list-gemini-models")
+async def list_gemini_models(current_user: User = Depends(require_admin)):
+    """List available Gemini models"""
+    try:
+        import google.generativeai as genai
+        genai.configure(api_key=settings.gemini_api_key)
+        
+        models = genai.list_models()
+        available = [
+            {
+                "name": m.name,
+                "display_name": m.display_name,
+                "supported_methods": m.supported_generation_methods
+            }
+            for m in models
+        ]
+        
+        return {
+            "status": "success",
+            "available_models": available,
+            "count": len(available)
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "error": str(e)
+        }
+
 if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("PORT", 8000))
