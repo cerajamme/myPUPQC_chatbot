@@ -1260,7 +1260,40 @@ async def get_user_messages(
     except Exception as e:
         logger.error(f"Error getting user messages: {e}")
         return {"new_messages": []}
-    
+
+@app.get("/admin/direct-chats/{chat_id}/messages", response_model=List[DirectMessageResponse])
+async def get_chat_messages(
+    chat_id: int,
+    current_user: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """Get all messages for a specific chat"""
+    try:
+        # Verify chat exists
+        chat = db.query(DirectChat).filter(DirectChat.id == chat_id).first()
+        if not chat:
+            raise HTTPException(status_code=404, detail="Chat not found")
+        
+        # Get all messages for this chat
+        messages = db.query(DirectMessage).filter(
+            DirectMessage.chat_id == chat_id
+        ).order_by(DirectMessage.sent_at.asc()).all()
+        
+        return [
+            DirectMessageResponse(
+                id=msg.id,
+                sender_type=msg.sender_type,
+                message=msg.message,
+                sent_at=msg.sent_at.isoformat()
+            )
+            for msg in messages
+        ]
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting chat messages: {e}")
+        return []
+
 @app.delete("/admin/clear-closed-chats")
 async def clear_closed_chats(
     current_user: User = Depends(require_admin),

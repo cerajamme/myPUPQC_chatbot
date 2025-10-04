@@ -7,14 +7,86 @@ import './DashboardStyles.css';
 import ProfileSettings from './ProfileSettings';
 import DirectInquiries from './DirectInquiries';
 
-
 const Dashboard = ({ user, onLogout }) => {
   const [activeTab, setActiveTab] = useState('upload');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const [unreadInquiries, setUnreadInquiries] = useState(0);
   const profileRef = useRef(null);
   const [showProfileSettings, setShowProfileSettings] = useState(false);
-  
+  const notificationSound = useRef(null);
+  const previousUnreadRef = useRef(0);
+
+  // Initialize notification sound
+  useEffect(() => {
+    notificationSound.current = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBTGH0fPTgjMGHm7A7+OZURE');
+    
+    // Request notification permission
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+  }, []);
+
+  // Poll for unread inquiries
+  useEffect(() => {
+    const checkUnread = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const response = await fetch('https://mypupqcchatbot-production.up.railway.app/admin/direct-chats', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await response.json();
+        const waiting = Array.isArray(data) ? data.filter(c => c.status === 'waiting').length : 0;
+        
+        // Check if unread count increased (new inquiry)
+        if (waiting > previousUnreadRef.current && previousUnreadRef.current > 0) {
+          showNotification('New Direct Inquiry', 'A student has sent a new message');
+          playSound();
+        }
+        
+        previousUnreadRef.current = waiting;
+        setUnreadInquiries(waiting);
+        
+        // Update browser tab title
+        if (waiting > 0) {
+          document.title = `(${waiting}) Admin Dashboard - PUPQC`;
+        } else {
+          document.title = 'Admin Dashboard - PUPQC';
+        }
+      } catch (error) {
+        console.error('Error checking unread:', error);
+      }
+    };
+
+    checkUnread();
+    const interval = setInterval(checkUnread, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const showNotification = (title, body) => {
+    if ('Notification' in window && Notification.permission === 'granted') {
+      const notification = new Notification(title, {
+        body: body,
+        icon: '/favicon.ico',
+        badge: '/favicon.ico',
+        tag: 'direct-inquiry'
+      });
+      
+      notification.onclick = () => {
+        window.focus();
+        setActiveTab('inquiries');
+        notification.close();
+      };
+      
+      setTimeout(() => notification.close(), 5000);
+    }
+  };
+
+  const playSound = () => {
+    if (notificationSound.current) {
+      notificationSound.current.play().catch(e => console.log('Sound failed:', e));
+    }
+  };
 
   // Close profile menu when clicking outside
   useEffect(() => {
@@ -96,11 +168,9 @@ const Dashboard = ({ user, onLogout }) => {
 
   return (
     <div className="dashboard-container">
-      {/* Navbar */}
       <nav className="dashboard-navbar">
         <div className="navbar-container">
           <div className="navbar-content">
-            {/* Mobile menu button */}
             <button 
               className="mobile-menu-button"
               onClick={toggleMobileMenu}
@@ -116,7 +186,6 @@ const Dashboard = ({ user, onLogout }) => {
               )}
             </button>
 
-            {/* Brand */}
             <div className="navbar-brand">
               <div className="navbar-logo">
                 <img 
@@ -144,7 +213,6 @@ const Dashboard = ({ user, onLogout }) => {
                 </div>
               </div>
 
-              {/* Desktop Navigation */}
               <div className="navbar-nav-desktop">
                 <div className="navbar-nav-list">
                   {tabs.map(tab => (
@@ -161,16 +229,35 @@ const Dashboard = ({ user, onLogout }) => {
               </div>
             </div>
 
-            {/* User menu */}
             <div className="navbar-user-menu">
-              {/* Notifications */}
-              <button className="notification-button">
+              <button 
+                className="notification-button" 
+                style={{ position: 'relative' }}
+                onClick={() => setActiveTab('inquiries')}
+              >
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                   <path d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
+                {unreadInquiries > 0 && (
+                  <span style={{
+                    position: 'absolute',
+                    top: '-4px',
+                    right: '-4px',
+                    background: '#dc2626',
+                    color: 'white',
+                    borderRadius: '10px',
+                    padding: '2px 6px',
+                    fontSize: '10px',
+                    fontWeight: 'bold',
+                    minWidth: '18px',
+                    textAlign: 'center',
+                    boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
+                  }}>
+                    {unreadInquiries}
+                  </span>
+                )}
               </button>
 
-              {/* Profile dropdown */}
               <div className="profile-dropdown" ref={profileRef}>
                 <button 
                   className="profile-button"
@@ -189,7 +276,6 @@ const Dashboard = ({ user, onLogout }) => {
                     </div>
                   </div>
                   <hr style={{ margin: '0.25rem 0', border: 'none', borderTop: '1px solid #e5e7eb' }} />
-                  {/* <button className="profile-dropdown-item">Your Profile</button> */}
                   <button 
                     className="profile-dropdown-item"
                     onClick={() => {
@@ -211,7 +297,6 @@ const Dashboard = ({ user, onLogout }) => {
           </div>
         </div>
 
-        {/* Mobile menu */}
         <div className={`mobile-menu ${mobileMenuOpen ? 'show' : ''}`}>
           {tabs.map(tab => (
             <button
@@ -226,28 +311,18 @@ const Dashboard = ({ user, onLogout }) => {
         </div>
       </nav>
 
-      {/* User Info Header */}
-      {/* <div className="dashboard-user-info">
-        <div className="user-details">
-          <h2>Student Chatbot Dashboard</h2>
-          <p>Manage your chatbot and documents</p>
-        </div>
-      </div> */}
-
-      {/* Content */}
       <div className="dashboard-content">
         {activeTab === 'chat' && <TestChat />}
         {activeTab === 'inquiries' && <DirectInquiries />}
         {activeTab === 'upload' && <FileUpload />}
         {activeTab === 'documents' && <DocumentList />}
         {activeTab === 'analytics' && <Analytics />}
-        
       </div>
+
       {showProfileSettings && (
         <ProfileSettings
           user={user}
           onUserUpdate={(updatedUser) => {
-            // Update user state if needed
             console.log('User updated:', updatedUser);
           }}
           onClose={() => setShowProfileSettings(false)}

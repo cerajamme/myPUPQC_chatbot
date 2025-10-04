@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import './DirectInquiriesStyles.css';
 
 const DirectInquiries = () => {
@@ -7,27 +7,87 @@ const DirectInquiries = () => {
   const [messages, setMessages] = useState([]);
   const [reply, setReply] = useState('');
   const [loading, setLoading] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const previousChatsRef = useRef([]);
+  const notificationSound = useRef(null);
 
-  // Load chats on mount and refresh every 5 seconds
+  // Request notification permission on mount
   useEffect(() => {
-    loadChats();
-    const interval = setInterval(loadChats, 5000);
-    return () => clearInterval(interval);
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+    
+    notificationSound.current = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBTGH0fPTgjMGHm7A7+OZURE');
   }, []);
 
-  const loadChats = async () => {
+  const showNotification = (title, body) => {
+    if ('Notification' in window && Notification.permission === 'granted') {
+      const notification = new Notification(title, {
+        body: body,
+        icon: '/favicon.ico',
+        badge: '/favicon.ico',
+        tag: 'direct-inquiry',
+        requireInteraction: false
+      });
+      
+      notification.onclick = () => {
+        window.focus();
+        notification.close();
+      };
+      
+      setTimeout(() => notification.close(), 5000);
+    }
+  };
+
+  const playNotificationSound = () => {
+    if (notificationSound.current) {
+      notificationSound.current.play().catch(e => console.log('Sound play failed:', e));
+    }
+  };
+
+  const loadChats = useCallback(async () => {
     try {
       const token = localStorage.getItem('token');
       const response = await fetch('https://mypupqcchatbot-production.up.railway.app/admin/direct-chats', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await response.json();
-      setChats(Array.isArray(data) ? data : []);
+      const newChats = Array.isArray(data) ? data : [];
+      
+      if (previousChatsRef.current.length > 0) {
+        const newChatIds = newChats.map(c => c.id);
+        const oldChatIds = previousChatsRef.current.map(c => c.id);
+        const hasNewChat = newChatIds.some(id => !oldChatIds.includes(id));
+        
+        if (hasNewChat) {
+          showNotification('New Direct Inquiry', 'A student has sent a new message');
+          playNotificationSound();
+        }
+      }
+      
+      previousChatsRef.current = newChats;
+      setChats(newChats);
+      
+      const waiting = newChats.filter(c => c.status === 'waiting').length;
+      setUnreadCount(waiting);
+      
+      if (waiting > 0) {
+        document.title = `(${waiting}) Direct Inquiries - PUPQC Admin`;
+      } else {
+        document.title = 'Direct Inquiries - PUPQC Admin';
+      }
+      
     } catch (error) {
       console.error('Error loading chats:', error);
       setChats([]);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    loadChats();
+    const interval = setInterval(loadChats, 5000);
+    return () => clearInterval(interval);
+  }, [loadChats]);
 
   const selectChat = async (chat) => {
     setSelectedChat(chat);
@@ -60,7 +120,6 @@ const DirectInquiries = () => {
         body: JSON.stringify({ message: reply })
       });
 
-      // Add to UI immediately
       setMessages([...messages, {
         id: Date.now(),
         sender_type: 'admin',
@@ -68,6 +127,7 @@ const DirectInquiries = () => {
         sent_at: new Date().toISOString()
       }]);
       setReply('');
+      loadChats();
     } catch (error) {
       console.error('Error sending reply:', error);
     }
@@ -110,11 +170,23 @@ const DirectInquiries = () => {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
             </svg>
             Direct Inquiries
+            {unreadCount > 0 && (
+              <span style={{
+                marginLeft: '8px',
+                background: '#dc2626',
+                color: 'white',
+                borderRadius: '12px',
+                padding: '2px 8px',
+                fontSize: '12px',
+                fontWeight: 'bold'
+              }}>
+                {unreadCount}
+              </span>
+            )}
           </h2>
         </div>
 
         <div className="inquiries-content-wrapper">
-          {/* Chat List */}
           <div className="inquiries-list-section">
             <div className="inquiries-list-header">
               <h3>Conversations ({chats.length})</h3>
@@ -184,7 +256,6 @@ const DirectInquiries = () => {
             </div>
           </div>
 
-          {/* Messages */}
           <div className="inquiry-chat-section">
             {!selectedChat ? (
               <div className="no-selection">
