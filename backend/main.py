@@ -1448,56 +1448,56 @@ async def close_chat_session(
         logger.error(f"Error closing chat session: {e}")
         return {"error": "Failed to close session"}
 
-@app.get("/admin/test-gemini")
-async def test_gemini_api(current_user: User = Depends(require_admin)):
-    """Test Gemini API connection"""
-    try:
-        import google.generativeai as genai
-        genai.configure(api_key=settings.gemini_api_key)
-        model = genai.GenerativeModel('gemini-2.5-flash')
+# @app.get("/admin/test-gemini")
+# async def test_gemini_api(current_user: User = Depends(require_admin)):
+#     """Test Gemini API connection"""
+#     try:
+#         import google.generativeai as genai
+#         genai.configure(api_key=settings.gemini_api_key)
+#         model = genai.GenerativeModel('gemini-2.5-flash')
         
-        response = model.generate_content("Say hello")
+#         response = model.generate_content("Say hello")
         
-        return {
-            "status": "success",
-            "gemini_response": response.text,
-            "api_key_present": bool(settings.gemini_api_key),
-            "api_key_length": len(settings.gemini_api_key) if settings.gemini_api_key else 0
-        }
-    except Exception as e:
-        return {
-            "status": "error",
-            "error": str(e),
-            "error_type": type(e).__name__
-        }
+#         return {
+#             "status": "success",
+#             "gemini_response": response.text,
+#             "api_key_present": bool(settings.gemini_api_key),
+#             "api_key_length": len(settings.gemini_api_key) if settings.gemini_api_key else 0
+#         }
+#     except Exception as e:
+#         return {
+#             "status": "error",
+#             "error": str(e),
+#             "error_type": type(e).__name__
+#         }
 
-@app.get("/admin/list-gemini-models")
-async def list_gemini_models(current_user: User = Depends(require_admin)):
-    """List available Gemini models"""
-    try:
-        import google.generativeai as genai
-        genai.configure(api_key=settings.gemini_api_key)
+# @app.get("/admin/list-gemini-models")
+# async def list_gemini_models(current_user: User = Depends(require_admin)):
+#     """List available Gemini models"""
+#     try:
+#         import google.generativeai as genai
+#         genai.configure(api_key=settings.gemini_api_key)
         
-        models = genai.list_models()
-        available = [
-            {
-                "name": m.name,
-                "display_name": m.display_name,
-                "supported_methods": m.supported_generation_methods
-            }
-            for m in models
-        ]
+#         models = genai.list_models()
+#         available = [
+#             {
+#                 "name": m.name,
+#                 "display_name": m.display_name,
+#                 "supported_methods": m.supported_generation_methods
+#             }
+#             for m in models
+#         ]
         
-        return {
-            "status": "success",
-            "available_models": available,
-            "count": len(available)
-        }
-    except Exception as e:
-        return {
-            "status": "error",
-            "error": str(e)
-        }
+#         return {
+#             "status": "success",
+#             "available_models": available,
+#             "count": len(available)
+#         }
+#     except Exception as e:
+#         return {
+#             "status": "error",
+#             "error": str(e)
+#         }
 
 if __name__ == "__main__":
     import uvicorn
